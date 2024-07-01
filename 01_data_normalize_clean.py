@@ -3,6 +3,7 @@
 # 
 import pandas as pd
 import numpy as np
+import time
 from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
