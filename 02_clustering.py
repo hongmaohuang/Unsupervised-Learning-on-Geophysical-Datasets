@@ -14,7 +14,6 @@ from scipy.interpolate import griddata
 from keras.layers import Input, Dense
 from keras.models import Model, Sequential
 from keras.layers import BatchNormalization, Dropout
-
 from tensorflow.keras.losses import Huber
 
 
