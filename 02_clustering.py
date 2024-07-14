@@ -1,20 +1,22 @@
 # ============ Setting  ============ #
 import os 
 import sys
-import pandas as pd 
+import glob
+import pickle
 import numpy as np
+import pandas as pd 
 from netCDF4 import Dataset
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 from scipy.interpolate import griddata
-from keras.optimizers import SGD
 from keras.layers import Input, Dense
 from keras.models import Model, Sequential
-from keras.utils import plot_model
 from keras.layers import BatchNormalization, Dropout
-import netron
+
+from tensorflow.keras.losses import Huber
+
 
 NUM_PARALLEL_EXEC_UNITS=20
 os.environ['OMP_NUM_THREADS'] = str(NUM_PARALLEL_EXEC_UNITS)
@@ -27,18 +29,20 @@ except:
 # ============ Parameters  ============ #
 interval_interpol = '0.002'
 depth_cluster_result = 0.4
-cluster_method = 'VQ'
+cluster_method = 'GMM'
 gmm_clusters = 6
 kmean_clusters = 6
 vq_clusters = 8 #要2的指數 （2, 4, 8, 16）
 #K-means, GMM, VQ
 evaluation_of_num_cluster = 'no'
 max_clusters = 50  # 最大分群數量，用來找最佳分群數
-autoencoder_epoch = 1000
+autoencoder_epoch = 500
 autoencoder_batch = 4096*6
 optimizer = 'Adam'
-loss='mse'
-train_autoencoder = 'yes'
+huber_loss = Huber()
+loss = huber_loss
+#'mse' #huber_loss
+train_autoencoder = 'load encoded data'
 # yes, no, load encoded data
 plot_the_input_and_output = 'no'
 
@@ -47,7 +51,7 @@ data_xy = pd.read_csv('../data_xy_' + interval_interpol + '.csv')
 data_nona = pd.read_csv('../data_nona_' + interval_interpol + '.csv')
 data_dict = data_nona
 df = pd.DataFrame(data_dict)
-df = df.drop(columns=['x_coor', 'y_coor', 'z_coor', 'Vp_value', 'MT_Value' , 'Vpt_value'])
+df = df.drop(columns=['z', 'x_coor', 'y_coor', 'z_coor', 'Vp_value', 'MT_Value' , 'Vpt_value'])
 data = df.values
 
 # ============ Autoencoder  ============ #
@@ -61,41 +65,41 @@ if train_autoencoder == 'yes':
     # Neural Network
     autoencoder = Sequential([
         # Encoder
-        Dense(input_dim, activation='relu', input_shape=(input_dim,), name='input_layer'),
+        Dense(input_dim, activation='tanh', input_shape=(input_dim,), name='input_layer'),
         BatchNormalization(),
         Dropout(0.2),
-        Dense(128, activation='relu'),  
+        Dense(128, activation='tanh'),  
         BatchNormalization(),
         Dropout(0.2),
-        Dense(64, activation='relu'),  
+        Dense(64, activation='tanh'),  
         BatchNormalization(),
         Dropout(0.2),
-        Dense(32, activation='relu'),
+        Dense(32, activation='tanh'),
         BatchNormalization(),
         Dropout(0.2),
-        Dense(8, activation='relu'),  
+        Dense(8, activation='tanh'),  
         BatchNormalization(),
         Dropout(0.2),
         
         # Latent Layer
-        Dense(4, activation='relu', name='latent_layer'), 
+        Dense(4, activation='tanh', name='latent_layer'), 
         BatchNormalization(),
         Dropout(0.2),
         
         # Decoder
-        Dense(8, activation='relu'),  
+        Dense(8, activation='tanh'),  
         BatchNormalization(),
         Dropout(0.2),
-        Dense(32, activation='relu'),
+        Dense(32, activation='tanh'),
         BatchNormalization(),
         Dropout(0.2),
-        Dense(64, activation='relu'), 
+        Dense(64, activation='tanh'), 
         BatchNormalization(),
         Dropout(0.2),
-        Dense(128, activation='relu'),  
+        Dense(128, activation='tanh'),  
         BatchNormalization(),
         Dropout(0.2),
-        Dense(input_dim, activation='relu')  
+        Dense(input_dim, activation='tanh')  
     ])
 
     # Compile
@@ -105,7 +109,22 @@ if train_autoencoder == 'yes':
     #autoencoder.summary()
 
     # Self-supervised learning
-    autoencoder.fit(data, data, epochs=autoencoder_epoch, batch_size=autoencoder_batch, shuffle=True)
+    history = autoencoder.fit(data, data, epochs=autoencoder_epoch, batch_size=autoencoder_batch)
+    
+    # Save the history
+    with open('autoencoder_history.pkl', 'wb') as file:
+        pickle.dump(history.history, file)
+
+    # Plot the loss curve
+    matplotlib.rcParams['font.family'] = 'Nimbus Sans'
+    matplotlib.rcParams['font.size'] = 15
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['loss'], label='Training Loss', c='gray', linewidth = 2)
+    plt.title('Loss Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.grid(True)
+    plt.savefig('../Fig/loss_encoder.png', dpi=300)
 
     # Model
     encoder = Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('latent_layer').output)
@@ -129,6 +148,18 @@ if train_autoencoder == 'no':
     latent_space_output = data
 
 else:
+    with open('autoencoder_history.pkl', 'rb') as file:
+        history = pickle.load(file)
+    # Plot the loss curve
+    matplotlib.rcParams['font.family'] = 'Nimbus Sans'
+    matplotlib.rcParams['font.size'] = 15
+    plt.figure(figsize=(10, 6))
+    plt.plot(history['loss'], label='Training Loss', c='gray', linewidth = 2)
+    plt.title('Loss Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.grid(True)
+    plt.savefig('../Fig/loss_encoder.png', dpi=300)
     latent_space_output = pd.read_csv('../latent_space_output.csv').values
 
 if plot_the_input_and_output == 'yes': 
@@ -392,25 +423,3 @@ cluterrrrrr = ncout.createVariable('clusters','float32',('depth','lat','lon'));c
 ncout.close();
 
 # %%
-
-
-
-
-
-
-
-
-'''
-
-BK
-    # Retrain the model if any of the latent space dimensions are almost all near-zeros
-    while is_any_column_almost_all_zeros(latent_space_output):
-        print('Retraining the model...')
-        autoencoder.fit(data, data, epochs=autoencoder_epoch, batch_size=autoencoder_batch, shuffle=True)
-        latent_space_output = encoder.predict(data)
-        print(latent_space_output)
-    else:
-        print("Model trained successfully.")
-
-
-'''
