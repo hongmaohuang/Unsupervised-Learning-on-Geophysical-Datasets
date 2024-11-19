@@ -1,11 +1,19 @@
 #
 # This code makes the grid of mt model and vp model to be the same.
 # 
+# %%
 import numpy as np
 import pandas as pd
 from scipy.interpolate import griddata
 from sklearn.preprocessing import MinMaxScaler
 import math
+import matplotlib.pyplot as plt
+
+# Define interpolation grid
+interval_interpol_hori = 'original_resol'
+'0.002 # degree'
+interval_interpol_vertical = 'original_resol'
+'0.002  # km'
 
 # Load data
 mt_data = pd.read_csv('../../MT_Result/Ilan_MT3D_all.csv', sep=',')
@@ -14,8 +22,32 @@ rmap_data = pd.read_csv('../../V19/vpvsrmap_1220.dat', delim_whitespace=True, sk
 
 mt_data['Elevation_m'] = mt_data['Elevation_m'] * -0.001
 
+x_range = vp_data.lon.unique()
+y_range = vp_data.lat.unique()
+z_target = vp_data.dep.unique()
+
+grid_x, grid_y, grid_z = np.meshgrid(x_range, y_range, z_target, indexing='ij')
+
+mt_data_filtered = mt_data[mt_data['Rho_ohm_m'] <= 10000]
+x_mt = mt_data_filtered['X_84']
+y_mt = mt_data_filtered['Y_84']
+z_mt = mt_data_filtered['Elevation_m']
+values_mt = np.log10(mt_data_filtered['Rho_ohm_m'])
+
+points_mt = np.array([x_mt, y_mt, z_mt]).T
+grid_values_mt = griddata(points_mt, values_mt, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
+
+all_geophysical_data =  vp_data
+all_geophysical_data['interpolated_mt'] = griddata(points_mt, values_mt, (vp_data['lon'], vp_data['lat'], vp_data['dep']), method='linear', fill_value=np.nan)
+
+interpolated_values_vp = all_geophysical_data.vp
+interpolated_values_mt = all_geophysical_data.interpolated_mt
+interpolated_values_vpt = all_geophysical_data.vpt
+interpolated_values_mt_vp = interpolated_values_mt/interpolated_values_vp
+
+'''
+
 # Define interpolation grid
-resol_p_lowest = 0.6
 interval_interpol_hori = 0.002 # degree
 interval_interpol_vertical = 0.002  # km
 
@@ -58,7 +90,7 @@ interpolated_values_vp = grid_values_vp.flatten()
 interpolated_values_mt = grid_values_mt.flatten()
 interpolated_values_vpt = grid_values_vpt.flatten()
 interpolated_values_mt_vp = interpolated_values_mt/interpolated_values_vp
-
+''' 
 # Normalize the interpolated values to 0-1
 scaler = MinMaxScaler()
 
@@ -82,9 +114,9 @@ normalized_values_mt_vp = normalized_values[:, 3]
 valid_mask = ~np.isnan(normalized_values_vp) & ~np.isnan(normalized_values_mt) & ~np.isnan(normalized_values_vpt) & ~np.isnan(normalized_values_mt_vp)
 
 data = {
-    'Lon': target_points[valid_mask, 0],
-    'Lat': target_points[valid_mask, 1],
-    'Dep': target_points[valid_mask, 2],
+    'Lon': all_geophysical_data.lon[valid_mask],
+    'Lat': all_geophysical_data.lat[valid_mask],
+    'Dep': all_geophysical_data.dep[valid_mask],
     'Vp': interpolated_values_vp[valid_mask],
     'Resis': interpolated_values_mt[valid_mask],
     'Vpt': interpolated_values_vpt[valid_mask],
@@ -95,4 +127,4 @@ data = {
 }
 
 threeD_df = pd.DataFrame(data)
-threeD_df.to_csv('../data_nona_' + str(interval_interpol_vertical) + '.csv', index=False)
+threeD_df.to_csv('../data_nona_' + interval_interpol_vertical + '.csv', index=False)
