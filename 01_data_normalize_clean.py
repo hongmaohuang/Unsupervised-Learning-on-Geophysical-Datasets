@@ -16,7 +16,7 @@ mt_data['Elevation_m'] = mt_data['Elevation_m'] * -0.001
 
 # Define interpolation grid
 resol_p_lowest = 0.6
-interval_interpol_hori = 0.002  # degree
+interval_interpol_hori = 0.002 # degree
 interval_interpol_vertical = 0.002  # km
 
 x_range = np.arange(121.653, 121.735, interval_interpol_hori)

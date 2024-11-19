@@ -19,7 +19,7 @@ clean_files()
 
 # Settings
 interval_interpol = '0.002'
-gmm_clusters = 5
+gmm_clusters = 3
 cluster_method = 'GMM'
 n_init = 10
 cov_type = 'full'
@@ -43,7 +43,7 @@ data_nona = pd.read_csv(f'../data_nona_{interval_interpol}.csv')
 
 # Data processing
 df = pd.DataFrame(data_nona)
-df = df.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm', 'Resis_Vp_norm'])
+df = df.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm'])
 data = df.values
 data_trans = np.transpose(data)
 data = data_trans
@@ -74,25 +74,14 @@ if evaluation_of_num_cluster == 'yes':
     plt.ylabel('BIC')
     plt.savefig('../Fig/gmm_bic_num_cluster.png', dpi=300)
 
-
 # GMM
 print('GMM clustering')
 gmm = GaussianMixture(n_components=gmm_clusters, covariance_type=cov_type, n_init=n_init, init_params=init_params, max_iter=max_iter, reg_covar=reg_covar, tol=tol)
 gmm.fit(data_xy_clu)
 labels = gmm.predict(data_xy_clu)
 print('Compelet GMM clustering')
-'''
 
-# DBSCAN TEST
-print('DBSCAN clustering')
-from sklearn.cluster import DBSCAN
-# DBSCAN Parameters
-dbscan = DBSCAN(eps=5, min_samples=10000)
-dbscan.fit(data_xy_clu)
-# Obtain cluster labels
-labels = dbscan.labels_
-print('Complete DBSCAN clustering')
-''' 
+
 # Create DataFrame for clustering results
 cluster_data = {
     'Vp': data_nona['Vp_norm'],
