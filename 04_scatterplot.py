@@ -1,6 +1,5 @@
 # %%
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,16 +9,15 @@ from matplotlib.colors import LinearSegmentedColormap
 import subprocess
 import glob
 import os
-data_clusters = pd.read_csv('../cluster_results.csv')
-#data_clusters = pd.read_csv('../cluster_results_combine.csv')
 
+data_clusters = pd.read_csv('../cluster_results.csv')
 binss = 50
 #resolution
 
 cluster_number = max(data_clusters.Clusters) + 1
 colors = cm.Set3.colors
 deep_yellow = colors[-1]
-index_of_light_yellow = 1  # 這個索引根據實際情況調整
+index_of_light_yellow = 1  # this depends on your using scenario
 colors_cluster_all = list(colors)
 colors_cluster_all[index_of_light_yellow] = deep_yellow
 cluster_number = max(data_clusters.Clusters) + 1
@@ -51,13 +49,12 @@ legend = plt.legend(markerscale=10)
 legend.get_frame().set_alpha(0.3) 
 plt.savefig('../Fig/scatterplot_overall.png', dpi=300)
 
-# %%
 for i in range(len(colors_cluster)):
     x = data_clusters.Vp_ori[data_clusters.Clusters == i]
     y = np.log(data_clusters.MT_ori[data_clusters.Clusters == i])
     color = colors_cluster_all[i]
     cmap = LinearSegmentedColormap.from_list("mycmap", ["white", color])
-    # 創建 figure 和三個子圖
+    # Generate Figure and three subplots
     matplotlib.rcParams['font.family'] = 'Liberation Sans'
     matplotlib.rcParams['font.size'] = 25
     fig = plt.figure(figsize=(20, 15))
@@ -65,44 +62,44 @@ for i in range(len(colors_cluster)):
     ax2 = fig.add_subplot(221)
     ax3 = fig.add_subplot(224)
 
-    # 第一個子圖：散點圖
+    # First subplot: Scatter plot
     hist = ax1.hist2d(x, y, bins=(binss, binss), cmap=cmap, vmin=0)
     #plt.colorbar(hist[3], ax=ax1)
 
     ax1.set_xlabel('Vp (km/s)')
     ax1.set_ylabel('Log Resistivity (Ωm)')
     ax1.tick_params(axis='both', which='both', labelbottom=True, labelleft=True)
-    # 進行一次多項式擬合
+    # Perform a polynomial fitting
     coefficients, cov_matrix = np.polyfit(x, y, 1, cov=True)
     polynomial = np.poly1d(coefficients)
 
-    # 計算擬合線的誤差範圍
+    # Calculate the error range of the fitted line
     x_fit = np.linspace(min(x), max(x), 100)
     y_fit = polynomial(x_fit)
     error = np.sqrt(np.diag(cov_matrix))
-    upper_bound = y_fit + 1.96 * error[0]  # 1.96 是 95% 信賴區間的上界
-    lower_bound = y_fit - 1.96 * error[0]  # 1.96 是 95% 信賴區間的下界
+    upper_bound = y_fit + 1.96 * error[0]  # 1.96 is the upper bound of the 95% confidence interval
+    lower_bound = y_fit - 1.96 * error[0]  
 
-    # 繪製擬合線及誤差範圍
+    # Plot the fitted line and error range
     ax1.plot(x_fit, y_fit, color='black', linestyle='-', linewidth=4, label='Fit Line')
     ax1.plot(x_fit, upper_bound, color='gray', linestyle='--', linewidth=1, label='Upper Bound')
     ax1.plot(x_fit, lower_bound, color='gray', linestyle='--', linewidth=1, label='Lower Bound')
     ax1.fill_between(x_fit, upper_bound, lower_bound, color='gray', alpha=0.2)
 
-    # 第二個子圖：柱狀圖
+    # Second subplot: histogram
     ax2.hist(x, bins=binss, color=color, alpha=0.3, label='Vp Histogram')
     ax2.set_ylabel('Counts')
     ax2.set_xticklabels([]) 
 
-    # 第三個子圖：柱狀圖
+    # Third subplot: histogram
     ax3.hist(y, bins=binss, color=color, alpha=0.3, orientation='horizontal')
     ax3.set_xlabel('Counts')
     ax3.set_yticklabels([]) 
 
-    # 調整子圖的間距和柱狀圖的大小
+    # Adjust the spacing between subplots and the size of histograms
     fig.tight_layout()
 
-    # 調整柱狀圖的大小
+    # Adjust the size of histograms
     divider = ax2.get_position()
     ax2.set_position([divider.x0, divider.y0, divider.width , divider.height* 0.3])
 

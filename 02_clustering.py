@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
+import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
@@ -21,16 +22,16 @@ gmm_clusters = 5
 cluster_method = 'GMM'
 n_init = 10
 cov_type = 'full'
-# 'full'（每個群組都有完整的共變異數矩陣）、
-# 'tied'（所有群組共用一個共變異數矩陣）、
-# 'diag'（對角矩陣）或'spherical'（各向同性，只有單一方差）
+# 'full' (each cluster has its own full covariance matrix),
+# 'tied' (all clusters share the same covariance matrix),
+# 'diag' (diagonal covariance matrices), or 'spherical' (isotropic, single variance per cluster)
 init_params = 'kmeans'
-# 初始化參數的方法
+# Method for initializing parameters
 max_iter = 100
 reg_covar = 1e-4
-# 用來避免共變異數矩陣的奇異性，資料維度高可以設大一點，預設1e-6
+# Used to avoid singular covariance matrices; for high-dimensional data, this can be set higher. Default is 1e-6
 tol = 1e-3
-# 收斂容忍度，預設1e-3
+# Convergence tolerance, default is 1e-3
 
 evaluation_of_num_cluster = 'no'
 max_clusters = 30
@@ -61,7 +62,7 @@ if evaluation_of_num_cluster == 'yes':
         bic.append(gmm.bic(data_xy_clu))
         aic.append(gmm.aic(data_xy_clu))
 
-    # 繪製BIC曲線
+    # BIC Curve Plot
     plt.figure(figsize=(10, 6))
     matplotlib.rcParams['font.family'] = 'Nimbus Sans'
     matplotlib.rcParams['font.size'] = 10
@@ -77,7 +78,7 @@ gmm = GaussianMixture(n_components=gmm_clusters, covariance_type=cov_type, n_ini
 gmm.fit(data_xy_clu)
 labels = gmm.predict(data_xy_clu)
 print('Compelet GMM clustering')
-# %%
+
 # Create DataFrame for clustering results
 cluster_data = {
     'Vp': data_nona['Vp_norm'],
@@ -95,10 +96,9 @@ cluster_data = {
 df_cluster = pd.DataFrame(cluster_data)
 df_cluster.to_csv('../cluster_results.csv', index=False)
 
-# ========================================================== #
-# =================== NC File Generation =================== # 
-# ========================================================== #
+# NC File Generation 
 # Here the code transfers the output file of TomoFlex (e.g., vpvstommo.dat) to NetCDF file #
+
 data = df_cluster
 Depth_all = sorted(data.ZZ.unique())
 ndepth = len(Depth_all)
@@ -113,7 +113,7 @@ for i in Depth_all:
     for j in lat:
         filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
         row = list(filtered_data_lat.Vp_ori)
-        # 如果 row 的長度小於 nx，則在其末尾添加 nan
+        # If the length of row is smaller than nx, then add nan at the end of row
         if len(row) < nx:
             row.extend([np.nan] * (nx - len(row)))
         new.append(row)
@@ -127,7 +127,7 @@ for i in Depth_all:
     for j in lat:
         filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
         row = list(filtered_data_lat.Vpt_ori)
-        # 如果 row 的長度小於 nx，則在其末尾添加 nan
+        # If the length of row is smaller than nx, then add nan at the end of row
         if len(row) < nx:
             row.extend([np.nan] * (nx - len(row)))
         new.append(row)
@@ -141,7 +141,7 @@ for i in Depth_all:
     for j in lat:
         filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
         row = list(filtered_data_lat.MT_ori)
-        # 如果 row 的長度小於 nx，則在其末尾添加 nan
+        # If the length of row is smaller than nx, then add nan at the end of row
         if len(row) < nx:
             row.extend([np.nan] * (nx - len(row)))
         new.append(row)
@@ -154,7 +154,7 @@ for i in Depth_all:
     for j in lat:
         filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
         row = list(filtered_data_lat.Clusters)
-        # 如果 row 的長度小於 nx，則在其末尾添加 nan
+        # If the length of row is smaller than nx, then add nan at the end of row
         if len(row) < nx:
             row.extend([np.nan] * (nx - len(row)))
         new.append(row)

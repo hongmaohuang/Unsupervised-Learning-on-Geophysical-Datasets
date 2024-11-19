@@ -1,6 +1,4 @@
 # %%
-
-
 import pygmt
 import numpy as np
 import xarray as xr
@@ -18,13 +16,10 @@ import subprocess
 import glob
 import os 
 
-# 可以check interpolation of sampling rate 會不會差很多
-
 raw_data = xr.open_dataset('../tomo.nc')
 sta_Hong_path = '../stations.csv'
 sta_Hong_data = pd.read_csv(sta_Hong_path, delimiter=',', header=None, skiprows=1)
 sta_Hong_data.columns = ['sta', 'lon', 'lat', 'H']
-# %%
 
 output = '../Fig/'
 
@@ -56,7 +51,7 @@ interpo_value = 0.005
 
 colors = cm.Set3.colors
 deep_yellow = cm.Set3.colors[-1]
-index_of_light_yellow = 1  # 這個index根據實際情況調整
+index_of_light_yellow = 1  # this depends on your using scenario
 colors_cluster_all = list(colors)
 colors_cluster_all[index_of_light_yellow] = deep_yellow
 
@@ -67,7 +62,7 @@ points2d = np.empty([0, 4])
 
 matplotlib.rcParams['font.family'] = 'Nimbus Sans'
 matplotlib.rcParams['font.size'] = 25
-# %%
+
 for i in range(len(prof_line)):
     print(' =============================== ')
     print('Processing: ' + name_prof[i])
@@ -193,7 +188,7 @@ for i in range(len(prof_line)):
         for spine in ax.spines.values():
             spine.set_color('black')
             spine.set_linewidth(1.5)
-        ax.invert_xaxis()  # 讓緯度從右到左增加
+        ax.invert_xaxis()  # Make the Lat to be left to right
 
     plt.suptitle(name_prof[i], y=1, x=0.45)
     # Set common labelsxw
