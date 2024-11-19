@@ -7,6 +7,7 @@ from netCDF4 import Dataset
 import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
+from scipy.interpolate import griddata
 
 # Function to remove unnecessary files
 def clean_files():
@@ -18,7 +19,7 @@ def clean_files():
 clean_files()
 
 # Settings
-interval_interpol = '0.002'
+interval_interpol = 'original_resol'
 gmm_clusters = 3
 cluster_method = 'GMM'
 n_init = 10
@@ -81,7 +82,6 @@ gmm.fit(data_xy_clu)
 labels = gmm.predict(data_xy_clu)
 print('Compelet GMM clustering')
 
-
 # Create DataFrame for clustering results
 cluster_data = {
     'Vp': data_nona['Vp_norm'],
@@ -99,6 +99,7 @@ cluster_data = {
 df_cluster = pd.DataFrame(cluster_data)
 df_cluster.to_csv('../cluster_results.csv', index=False)
 
+''' 
 # NC File Generation 
 # Here the code transfers the output file of TomoFlex (e.g., vpvstommo.dat) to NetCDF file #
 
@@ -108,7 +109,6 @@ ndepth = len(Depth_all)
 lon = np.unique(np.array(data['XX']))
 lat = np.unique(np.array(data['YY']))
 ny, nx = (len(lat), len(lon))
-
 Vpppout = []
 for i in Depth_all:
     filtered_data_dep = data[data['ZZ'] == i]
@@ -175,3 +175,5 @@ vpttt = ncout.createVariable('vpt','float32',('depth','lat','lon'));vpttt.setnca
 mttt = ncout.createVariable('mt','float32',('depth','lat','lon'));mttt.setncattr('units','ohm-m');mttt[:] = Mtttout;
 cluterrrrrr = ncout.createVariable('clusters','float32',('depth','lat','lon'));cluterrrrrr.setncattr('units','piece');cluterrrrrr[:] = Clusterrrrs;
 ncout.close()
+
+'''
