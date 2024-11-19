@@ -1,4 +1,110 @@
 # %%
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+from matplotlib.ticker import MaxNLocator
+from geopy.distance import geodesic
+import matplotlib
+
+matplotlib.rcParams['font.family'] = 'Nimbus Sans'
+matplotlib.rcParams['font.size'] = 25
+
+# 讀取資料
+file_path = '../cluster_results.csv'  # 替換為您的檔案路徑
+data = pd.read_csv(file_path)
+
+# 設置顏色
+colors = cm.Set3.colors
+deep_yellow = cm.Set3.colors[-1]
+index_of_light_yellow = 1
+colors_cluster_all = list(colors)
+colors_cluster_all[index_of_light_yellow] = deep_yellow
+
+cluster_number = len(data.Clusters.unique())  # 計算群集數量
+colors_cluster = colors_cluster_all[:cluster_number]  # 按群集數量選擇顏色
+
+# 定義剖面線的起點和終點
+start_point = [121.68900, 24.715182]  # 起點經緯度
+end_point = [121.68900, 24.684155]    # 終點經緯度
+
+# 計算剖面距離（公里）
+def calculate_distance_km(x, y, start, end):
+    start_point = (start[1], start[0])  # (latitude, longitude)
+    point = (y, x)  # (latitude, longitude)
+    return geodesic(start_point, point).km
+
+data['Distance_km'] = data.apply(lambda row: calculate_distance_km(row['XX'], row['YY'], start_point, end_point), axis=1)
+
+# 過濾掉距離剖面線過遠的數據點
+tolerance = 0.001  # 容差
+line_vector = np.array([end_point[0] - start_point[0], end_point[1] - start_point[1]])
+line_norm = np.linalg.norm(line_vector)
+longitudes = data['XX']
+latitudes = data['YY']
+perpendicular_distance = abs((longitudes - start_point[0]) * line_vector[1] - 
+                              (latitudes - start_point[1]) * line_vector[0]) / line_norm
+filtered_data = data[perpendicular_distance <= tolerance]
+
+# 過濾深度範圍（地表至 1 公里）
+depth_limit = 1  # 限制深度範圍
+filtered_data_depth = filtered_data[filtered_data['ZZ'] >= -depth_limit]
+
+# 準備內插的點和值
+points_km = filtered_data_depth[['Distance_km', 'ZZ']].values
+grid_x_km, grid_y_km = np.meshgrid(
+    np.linspace(0, geodesic((start_point[1], start_point[0]), (end_point[1], end_point[0])).km, 50),  # Adjust to the profile length
+    np.linspace(filtered_data_depth['ZZ'].min(), filtered_data_depth['ZZ'].max(), 50)
+)
+
+# 繪製子圖
+params = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
+titles = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
+fig, axes = plt.subplots(4, 1, figsize=(20, 15), sharex=True)
+axes = axes.flatten()
+for i, param in enumerate(params):
+    if param != 'Clusters':
+        # Interpolate and plot continuous parameters
+        values = filtered_data_depth[param].values
+        grid_z = griddata(points_km, values, (grid_x_km, grid_y_km), method='linear')
+        
+        # 自訂 Vp_ori 和 Vpt_ori 範圍
+        if param == 'Vp_ori':  # 自訂 Vp_ori 範圍
+            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(1, 5, 100), vmin=1, vmax=5)
+        elif param == 'Vpt_ori':  # 自訂 dVp 範圍
+            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(-15, 15, 100), vmin=-15, vmax=15)
+        else:  # 其他參數保持原樣
+            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=50)
+        
+        # Add colorbar for continuous parameters
+        cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
+        cbar.set_label(param)
+    else:
+        # Interpolate and plot Clusters
+        cmap_cluster = mcolors.ListedColormap(colors_cluster)
+        bounds = np.arange(-1, cluster_number, 1)
+        ticks_cluster = np.arange(-0.5, cluster_number - 0.5, 1)
+        grid_z_ori = griddata(points_km, filtered_data_depth[param].values, (grid_x_km, grid_y_km), method='linear')
+        contourf_clus = axes[i].contourf(grid_x_km, -grid_y_km, grid_z_ori, levels=bounds, cmap=cmap_cluster)
+        # Add colorbar for Clusters
+        cbar = plt.colorbar(contourf_clus, ticks=ticks_cluster, ax=axes[i], orientation='vertical', pad=0.02)
+        cbar.ax.set_yticklabels(np.array([chr(k) for k in range(ord('A'), ord('Z') + 1)])[:cluster_number])
+        cbar.set_label('Clusters')
+        cbar.ax.tick_params(size=0)
+
+    # 設置圖例和軸標籤
+    axes[i].set_aspect('equal', adjustable='box')
+    axes[i].set_ylim([-0.75, 0])  # 設置 y 軸範圍
+
+# 調整佈局並顯示圖
+plt.tight_layout()
+plt.show()
+# %%
+'''
+
+# %%
 import pygmt
 import numpy as np
 import xarray as xr
@@ -15,6 +121,10 @@ import matplotlib.cm as cm
 import subprocess
 import glob
 import os 
+
+clusters_resultss = pd.read_csv('../cluster_results.csv')
+
+# %%
 
 raw_data = xr.open_dataset('../tomo.nc')
 sta_Hong_path = '../stations.csv'
@@ -48,7 +158,7 @@ vmin_mt, vmax_mt = 0, math.log10(10000)
 vmin_ptb, vmax_ptb = -15, 16
 cmap_style = 'jet_r'
 interpo_value = 0.005
-
+# %%
 colors = cm.Set3.colors
 deep_yellow = cm.Set3.colors[-1]
 index_of_light_yellow = 1  # this depends on your using scenario
@@ -208,3 +318,4 @@ for file in files:
     os.remove(file)
     print(f"Removed: {file}")
 
+'''
