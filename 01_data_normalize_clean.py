@@ -232,5 +232,7 @@ threeD_df = pd.DataFrame(data)
 #threeD_df[['Vp_norm', 'Resis_norm', 'Vpt_norm']] = scaler.fit_transform(threeD_df[['Vp_norm', 'Resis_norm', 'Vpt_norm']])
 threeD_df.to_csv('../data_nona_' + str(interval_interpol_vertical) + '.csv', index=False)
 
+
+
 # data_xy = threeD_df.drop(['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm'], axis=1)
 # data_xy.to_csv('../data_xy_' + str(interval_interpol_vertical) + '.csv', index=False)
