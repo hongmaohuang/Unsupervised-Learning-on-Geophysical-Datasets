@@ -5,102 +5,154 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
-from matplotlib.ticker import MaxNLocator
 from geopy.distance import geodesic
 import matplotlib
+import string
+import subprocess
+import glob
+import os 
 
+# General matplotlib settings
 matplotlib.rcParams['font.family'] = 'Nimbus Sans'
-matplotlib.rcParams['font.size'] = 25
+matplotlib.rcParams['font.size'] = 20
 
-# 讀取資料
-file_path = '../cluster_results.csv'  # 替換為您的檔案路徑
+# Profile definitions
+prof_line = [
+    [121.67416, 121.67416, 24.715182, 24.684155],
+    [121.68900, 121.68900, 24.715182, 24.684155],
+    [121.70672, 121.70672, 24.715182, 24.684155],
+    [121.67302000000001, 121.710639, 24.7107, 24.7107],
+    [121.67302000000001, 121.710639, 24.69773, 24.69773],
+    [121.67302000000001, 121.710639, 24.685, 24.685]
+]
+uppercase_letters = string.ascii_uppercase
+name_prof = [f"{letter}{letter}'" for letter in uppercase_letters]
+
+# Adjustable parameters
+file_path = '../cluster_results.csv'  # Path to input data file
+tolerance = 0.005                     # Tolerance for filtering data near the profile line
+depth_limit = 1                       # Depth range limit (e.g., 1 km)
+grid_resolution = 20                  # Resolution of the interpolation grid
+depth_ticks = np.array([-0.8, -0.6, -0.4, -0.2, 0.])  # Depth ticks (customizable)
+Vp_range = (1, 5)                     # Range for Vp_ori colorbar
+Vpt_range = (-20, 20)                 # Range for Vpt_ori colorbar
+MT_range = (0, 3.5)                   # Range for MT_ori colorbar
+cluster_colors = cm.Set3.colors       # Color map for clusters
+font_size = 25                        # Font size for labels and ticks
+output_dir = '../Fig/'                # Output directory for saving figures
+color_labelpad = 20
+
+# Load data
 data = pd.read_csv(file_path)
-
-# 設置顏色
-colors = cm.Set3.colors
-deep_yellow = cm.Set3.colors[-1]
+# %%
+# Adjust cluster colors
+deep_yellow = cluster_colors[-1]
 index_of_light_yellow = 1
-colors_cluster_all = list(colors)
+colors_cluster_all = list(cluster_colors)
 colors_cluster_all[index_of_light_yellow] = deep_yellow
 
-cluster_number = len(data.Clusters.unique())  # 計算群集數量
-colors_cluster = colors_cluster_all[:cluster_number]  # 按群集數量選擇顏色
+cluster_number = len(data.Clusters.unique())
+colors_cluster = colors_cluster_all[:cluster_number]
 
-# 定義剖面線的起點和終點
-start_point = [121.68900, 24.715182]  # 起點經緯度
-end_point = [121.68900, 24.684155]    # 終點經緯度
-
-# 計算剖面距離（公里）
+# Function to calculate profile distances
 def calculate_distance_km(x, y, start, end):
-    start_point = (start[1], start[0])  # (latitude, longitude)
-    point = (y, x)  # (latitude, longitude)
+    start_point = (start[1], start[0])
+    point = (y, x)
     return geodesic(start_point, point).km
 
-data['Distance_km'] = data.apply(lambda row: calculate_distance_km(row['XX'], row['YY'], start_point, end_point), axis=1)
+# Loop through each profile line
+for index, profile in enumerate(prof_line):
+    start_point = [profile[0], profile[2]]  # [longitude, latitude]
+    end_point = [profile[1], profile[3]]    # [longitude, latitude]
+    profile_name = name_prof[index]
 
-# 過濾掉距離剖面線過遠的數據點
-tolerance = 0.001  # 容差
-line_vector = np.array([end_point[0] - start_point[0], end_point[1] - start_point[1]])
-line_norm = np.linalg.norm(line_vector)
-longitudes = data['XX']
-latitudes = data['YY']
-perpendicular_distance = abs((longitudes - start_point[0]) * line_vector[1] - 
-                              (latitudes - start_point[1]) * line_vector[0]) / line_norm
-filtered_data = data[perpendicular_distance <= tolerance]
+    # Calculate profile distances
+    data['Distance_km'] = data.apply(lambda row: calculate_distance_km(row['XX'], row['YY'], start_point, end_point), axis=1)
 
-# 過濾深度範圍（地表至 1 公里）
-depth_limit = 1  # 限制深度範圍
-filtered_data_depth = filtered_data[filtered_data['ZZ'] >= -depth_limit]
+    # Filter data points near the profile
+    line_vector = np.array([end_point[0] - start_point[0], end_point[1] - start_point[1]])
+    line_norm = np.linalg.norm(line_vector)
+    longitudes = data['XX']
+    latitudes = data['YY']
+    perpendicular_distance = abs((longitudes - start_point[0]) * line_vector[1] -
+                                  (latitudes - start_point[1]) * line_vector[0]) / line_norm
+    filtered_data = data[perpendicular_distance <= tolerance]
 
-# 準備內插的點和值
-points_km = filtered_data_depth[['Distance_km', 'ZZ']].values
-grid_x_km, grid_y_km = np.meshgrid(
-    np.linspace(0, geodesic((start_point[1], start_point[0]), (end_point[1], end_point[0])).km, 50),  # Adjust to the profile length
-    np.linspace(filtered_data_depth['ZZ'].min(), filtered_data_depth['ZZ'].max(), 50)
-)
+    # Filter depth range
+    filtered_data_depth = filtered_data[filtered_data['ZZ'] >= -depth_limit]
 
-# 繪製子圖
-params = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
-titles = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
-fig, axes = plt.subplots(4, 1, figsize=(20, 15), sharex=True)
-axes = axes.flatten()
-for i, param in enumerate(params):
-    if param != 'Clusters':
-        # Interpolate and plot continuous parameters
-        values = filtered_data_depth[param].values
-        grid_z = griddata(points_km, values, (grid_x_km, grid_y_km), method='linear')
-        
-        # 自訂 Vp_ori 和 Vpt_ori 範圍
-        if param == 'Vp_ori':  # 自訂 Vp_ori 範圍
-            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(1, 5, 100), vmin=1, vmax=5)
-        elif param == 'Vpt_ori':  # 自訂 dVp 範圍
-            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(-15, 15, 100), vmin=-15, vmax=15)
-        else:  # 其他參數保持原樣
-            contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=50)
-        
-        # Add colorbar for continuous parameters
-        cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
-        cbar.set_label(param)
-    else:
-        # Interpolate and plot Clusters
-        cmap_cluster = mcolors.ListedColormap(colors_cluster)
-        bounds = np.arange(-1, cluster_number, 1)
-        ticks_cluster = np.arange(-0.5, cluster_number - 0.5, 1)
-        grid_z_ori = griddata(points_km, filtered_data_depth[param].values, (grid_x_km, grid_y_km), method='linear')
-        contourf_clus = axes[i].contourf(grid_x_km, -grid_y_km, grid_z_ori, levels=bounds, cmap=cmap_cluster)
-        # Add colorbar for Clusters
-        cbar = plt.colorbar(contourf_clus, ticks=ticks_cluster, ax=axes[i], orientation='vertical', pad=0.02)
-        cbar.ax.set_yticklabels(np.array([chr(k) for k in range(ord('A'), ord('Z') + 1)])[:cluster_number])
-        cbar.set_label('Clusters')
-        cbar.ax.tick_params(size=0)
+    # Prepare interpolation grid
+    points_km = filtered_data_depth[['Distance_km', 'ZZ']].values
+    grid_x_km, grid_y_km = np.meshgrid(
+        np.linspace(0, geodesic((start_point[1], start_point[0]), (end_point[1], end_point[0])).km, grid_resolution),
+        np.linspace(filtered_data_depth['ZZ'].min(), filtered_data_depth['ZZ'].max(), grid_resolution)
+    )
 
-    # 設置圖例和軸標籤
-    axes[i].set_aspect('equal', adjustable='box')
-    axes[i].set_ylim([-0.75, 0])  # 設置 y 軸範圍
+    # Plot figures
+    params = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
+    fig, axes = plt.subplots(4, 1, figsize=(20, 15), sharex=True)
+    axes = axes.flatten()
 
-# 調整佈局並顯示圖
-plt.tight_layout()
-plt.show()
+    for i, param in enumerate(params):
+        if param != 'Clusters':
+            values = filtered_data_depth[param].values
+            grid_z = griddata(points_km, values, (grid_x_km, grid_y_km), method='nearest')
+
+            if param == 'Vp_ori':
+                contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*Vp_range, 100), extend='both')
+                cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
+                cbar.set_ticks(np.arange(Vp_range[0], Vp_range[1] + 1, 1))
+                cbar.set_label('Vp (m/s)', labelpad=color_labelpad)
+                cbar.ax.yaxis.set_label_coords(7, 0.5)
+            elif param == 'Vpt_ori':
+                contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*Vpt_range, 100), extend='both')
+                cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
+                cbar.set_ticks(np.arange(Vpt_range[0], Vpt_range[1] + 1, 5))
+                cbar.set_label('dVp (%)', labelpad=color_labelpad)
+                cbar.ax.yaxis.set_label_coords(7, 0.5)
+            elif param == 'MT_ori':
+                contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*MT_range, 100), extend='both')
+                cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
+                cbar.set_ticks(np.arange(MT_range[0], MT_range[1] + 0.1, 0.5))
+                cbar.set_label('Log Resistivity (Ωm)', labelpad=color_labelpad)
+                cbar.ax.yaxis.set_label_coords(7, 0.5)
+        elif param == 'Clusters':
+            cmap_cluster = mcolors.ListedColormap(colors_cluster)
+            bounds = np.arange(-1, cluster_number, 1)
+            ticks_cluster = np.arange(-0.5, cluster_number - 0.5, 1)
+            grid_z_ori = griddata(points_km, filtered_data_depth[param].values, (grid_x_km, grid_y_km), method='nearest')
+            contourf_clus = axes[i].contourf(grid_x_km, -grid_y_km, grid_z_ori, levels=bounds, cmap=cmap_cluster)
+            cbar = plt.colorbar(contourf_clus, ticks=ticks_cluster, ax=axes[i], orientation='vertical', pad=0.02)
+            cbar.ax.set_yticklabels(np.array([chr(k) for k in range(ord('A'), ord('Z') + 1)])[:cluster_number])
+            cbar.ax.yaxis.set_label_coords(7, 0.5)
+            cbar.set_label('Clusters', labelpad=color_labelpad)
+            cbar.ax.tick_params(size=0)
+
+        yticks = depth_ticks
+        axes[i].set_yticklabels([f"{abs(y):.1f}" for y in yticks])
+        axes[i].set_ylim([-0.75, 0])
+
+    fig.text(0.45, 0.05, 'Distance (km)', ha='center', va='center')
+    fig.text(0.06, 0.5, 'Depth (km)', ha='center', va='center', rotation='vertical')
+    plt.subplots_adjust(hspace=0.1)
+    fig.savefig(f"{output_dir}{cluster_number}_{profile_name}.png", dpi=300, bbox_inches='tight', transparent=True)
+    plt.close(fig)
+
+
+
+pattern = f'../Fig/{cluster_number}_*.png'
+images = sorted(glob.glob(pattern))
+args = ["montage", "-geometry", "+0+0", "-tile", "3x2"] + images + ["../Fig/profiles.png"]
+
+subprocess.run(args)
+
+files = glob.glob(f'../Fig/{cluster_number}_*.png')
+for file in files:
+    os.remove(file)
+    print(f"Removed: {file}")
+
+
+
 # %%
 '''
 
