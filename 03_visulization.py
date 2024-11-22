@@ -11,6 +11,7 @@ import string
 import subprocess
 import glob
 import os 
+from pykrige.ok import OrdinaryKriging
 
 # General matplotlib settings
 matplotlib.rcParams['font.family'] = 'Nimbus Sans'
@@ -30,23 +31,63 @@ name_prof = [f"{letter}{letter}'" for letter in uppercase_letters]
 
 # Adjustable parameters
 file_path = '../cluster_results.csv'  # Path to input data file
-tolerance = 0.005                     # Tolerance for filtering data near the profile line
+tolerance = 0.01                     # Tolerance for filtering data near the profile line
 depth_limit = 1                       # Depth range limit (e.g., 1 km)
-grid_resolution = 20                  # Resolution of the interpolation grid
+grid_resolution = 10                  # Resolution of the interpolation grid
 depth_ticks = np.array([-0.8, -0.6, -0.4, -0.2, 0.])  # Depth ticks (customizable)
 Vp_range = (1, 5)                     # Range for Vp_ori colorbar
-Vpt_range = (-20, 20)                 # Range for Vpt_ori colorbar
-MT_range = (0, 3.5)                   # Range for MT_ori colorbar
+Vpt_range = (-15, 15)                 # Range for Vpt_ori colorbar
+MT_range = (0, 4)                   # Range for MT_ori colorbar
 cluster_colors = cm.Set3.colors       # Color map for clusters
 font_size = 25                        # Font size for labels and ticks
 output_dir = '../Fig/'                # Output directory for saving figures
 color_labelpad = 20
+interval_interpol_hori = 0.002 # degree
+interval_interpol_vertical = 0.002  # km
 
 # Load data
 data = pd.read_csv(file_path)
+
+# Extract necessary fields
+longitude = data['XX'].values
+latitude = data['YY'].values
+depth = data['ZZ'].values
+
+# Fields to be interpolated
+fields_to_interpolate = ['Vp', 'Ohm', 'Ohm_Vp_ratio', 'Clusters', 'Vp_ori', 'MT_ori', 'Vpt_ori']
+
+new_longitude = np.arange(121.673, 121.720, interval_interpol_hori)
+new_latitude = np.arange(24.684, 24.716, interval_interpol_hori)
+new_depth = np.arange(0, 0.8, interval_interpol_vertical)
+
+new_lon, new_lat, new_dep = np.meshgrid(new_longitude, new_latitude, new_depth, indexing='ij')
+
+interpolated_data = {
+    'XX': new_lon.ravel(),
+    'YY': new_lat.ravel(),
+    'ZZ': new_dep.ravel()
+}
+
+points = np.array([longitude, latitude, depth]).T
+grid = np.array([new_lon.ravel(), new_lat.ravel(), new_dep.ravel()]).T
+
+for field in fields_to_interpolate:
+    values = data[field].values
+    interpolated_values = griddata(points, values, grid, method='linear')
+    if field == 'Clusters':
+        interpolated_values = np.rint(interpolated_values).astype(int)
+    interpolated_data[field] = interpolated_values.ravel()
+
+interpolated_df = pd.DataFrame(interpolated_data)
+
+output_path = 'interpolated_3d_model_with_XX_YY_ZZ.csv'
+interpolated_df.to_csv(output_path, index=False)
+
+data = interpolated_df
 # %%
 # Adjust cluster colors
 deep_yellow = cluster_colors[-1]
+
 index_of_light_yellow = 1
 colors_cluster_all = list(cluster_colors)
 colors_cluster_all[index_of_light_yellow] = deep_yellow
@@ -62,73 +103,73 @@ def calculate_distance_km(x, y, start, end):
 
 # Loop through each profile line
 for index, profile in enumerate(prof_line):
+    print(f"Processing profile {index + 1}")
+    
     start_point = [profile[0], profile[2]]  # [longitude, latitude]
     end_point = [profile[1], profile[3]]    # [longitude, latitude]
     profile_name = name_prof[index]
-
+    
     # Calculate profile distances
     data['Distance_km'] = data.apply(lambda row: calculate_distance_km(row['XX'], row['YY'], start_point, end_point), axis=1)
-
+    
     # Filter data points near the profile
     line_vector = np.array([end_point[0] - start_point[0], end_point[1] - start_point[1]])
     line_norm = np.linalg.norm(line_vector)
     longitudes = data['XX']
     latitudes = data['YY']
+    
     perpendicular_distance = abs((longitudes - start_point[0]) * line_vector[1] -
                                   (latitudes - start_point[1]) * line_vector[0]) / line_norm
     filtered_data = data[perpendicular_distance <= tolerance]
-
-    # Filter depth range
-    filtered_data_depth = filtered_data[filtered_data['ZZ'] >= -depth_limit]
-
+    
     # Prepare interpolation grid
-    points_km = filtered_data_depth[['Distance_km', 'ZZ']].values
+    points_km = filtered_data[['Distance_km', 'ZZ']].values
     grid_x_km, grid_y_km = np.meshgrid(
         np.linspace(0, geodesic((start_point[1], start_point[0]), (end_point[1], end_point[0])).km, grid_resolution),
-        np.linspace(filtered_data_depth['ZZ'].min(), filtered_data_depth['ZZ'].max(), grid_resolution)
+        np.linspace(filtered_data['ZZ'].min(), filtered_data['ZZ'].max(), grid_resolution)
     )
-
-    # Plot figures
     params = ['Vp_ori', 'Vpt_ori', 'MT_ori', 'Clusters']
     fig, axes = plt.subplots(4, 1, figsize=(20, 15), sharex=True)
     axes = axes.flatten()
 
     for i, param in enumerate(params):
+        print(param)
         if param != 'Clusters':
-            values = filtered_data_depth[param].values
-            grid_z = griddata(points_km, values, (grid_x_km, grid_y_km), method='nearest')
+            values = filtered_data[param].values
+            # Griddata interpolation
+            grid_z = griddata((points_km[:, 0], points_km[:, 1]), values, (grid_x_km, grid_y_km), method='nearest')
 
             if param == 'Vp_ori':
                 contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*Vp_range, 100), extend='both')
                 cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
                 cbar.set_ticks(np.arange(Vp_range[0], Vp_range[1] + 1, 1))
                 cbar.set_label('Vp (m/s)', labelpad=color_labelpad)
-                cbar.ax.yaxis.set_label_coords(7, 0.5)
+
             elif param == 'Vpt_ori':
                 contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*Vpt_range, 100), extend='both')
                 cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
                 cbar.set_ticks(np.arange(Vpt_range[0], Vpt_range[1] + 1, 5))
                 cbar.set_label('dVp (%)', labelpad=color_labelpad)
-                cbar.ax.yaxis.set_label_coords(7, 0.5)
+
             elif param == 'MT_ori':
                 contourf = axes[i].contourf(grid_x_km, -grid_y_km, grid_z, cmap='jet_r', levels=np.linspace(*MT_range, 100), extend='both')
                 cbar = plt.colorbar(contourf, ax=axes[i], orientation='vertical', pad=0.02)
-                cbar.set_ticks(np.arange(MT_range[0], MT_range[1] + 0.1, 0.5))
+                cbar.set_ticks(np.arange(MT_range[0], MT_range[1] + 0.1, 1))
                 cbar.set_label('Log Resistivity (Ωm)', labelpad=color_labelpad)
-                cbar.ax.yaxis.set_label_coords(7, 0.5)
+
         elif param == 'Clusters':
             cmap_cluster = mcolors.ListedColormap(colors_cluster)
             bounds = np.arange(-1, cluster_number, 1)
             ticks_cluster = np.arange(-0.5, cluster_number - 0.5, 1)
-            grid_z_ori = griddata(points_km, filtered_data_depth[param].values, (grid_x_km, grid_y_km), method='nearest')
+            grid_z_ori = griddata(points_km, filtered_data[param].values, (grid_x_km, grid_y_km), method='nearest')
             contourf_clus = axes[i].contourf(grid_x_km, -grid_y_km, grid_z_ori, levels=bounds, cmap=cmap_cluster)
             cbar = plt.colorbar(contourf_clus, ticks=ticks_cluster, ax=axes[i], orientation='vertical', pad=0.02)
             cbar.ax.set_yticklabels(np.array([chr(k) for k in range(ord('A'), ord('Z') + 1)])[:cluster_number])
-            cbar.ax.yaxis.set_label_coords(7, 0.5)
             cbar.set_label('Clusters', labelpad=color_labelpad)
             cbar.ax.tick_params(size=0)
 
         yticks = depth_ticks
+        axes[i].set_yticks(yticks)
         axes[i].set_yticklabels([f"{abs(y):.1f}" for y in yticks])
         axes[i].set_ylim([-0.75, 0])
 
@@ -137,8 +178,6 @@ for index, profile in enumerate(prof_line):
     plt.subplots_adjust(hspace=0.1)
     fig.savefig(f"{output_dir}{cluster_number}_{profile_name}.png", dpi=300, bbox_inches='tight', transparent=True)
     plt.close(fig)
-
-
 
 pattern = f'../Fig/{cluster_number}_*.png'
 images = sorted(glob.glob(pattern))
@@ -150,7 +189,6 @@ files = glob.glob(f'../Fig/{cluster_number}_*.png')
 for file in files:
     os.remove(file)
     print(f"Removed: {file}")
-
 
 
 # %%
