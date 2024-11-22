@@ -19,8 +19,8 @@ def clean_files():
 clean_files()
 
 # Settings
-interval_interpol = 'original_resol'
-gmm_clusters = 3
+interval_interpol = '0.002'
+gmm_clusters = 2
 cluster_method = 'GMM'
 n_init = 10
 cov_type = 'full'
