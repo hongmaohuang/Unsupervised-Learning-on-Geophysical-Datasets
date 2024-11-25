@@ -1,4 +1,5 @@
-# %%
+
+'''
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -190,11 +191,10 @@ for file in files:
     os.remove(file)
     print(f"Removed: {file}")
 
-
-# %%
 '''
-
 # %%
+
+
 import pygmt
 import numpy as np
 import xarray as xr
@@ -213,8 +213,6 @@ import glob
 import os 
 
 clusters_resultss = pd.read_csv('../cluster_results.csv')
-
-# %%
 
 raw_data = xr.open_dataset('../tomo.nc')
 sta_Hong_path = '../stations.csv'
@@ -237,14 +235,14 @@ name_prof = [f"{letter}{letter}'" for letter in uppercase_letters]
 #  General Setting
 cluster_method = 'GMM'
 cluster_number = raw_data.clusters.data.max() + 1
-ytickslabelll = [0, 1, 2, 3, 4]
+ytickslabelll = [1, 2, 3]
 prof_range_plot = [0.8, 0]
 prof_range_for_plot = [0.75, 0]
 ticks_color_abs = [1, 2, 3, 4, 5]
 ticks_color_ptb = [-15, -5, -10, 0, 10, 5, 15]
 ticks_cluster = np.arange(-0.5, -0.5 + cluster_number*1, 1)
 vmin_abs, vmax_abs = 1, 5.1
-vmin_mt, vmax_mt = 0, math.log10(10000)
+vmin_mt, vmax_mt = 1, math.log10(1000)
 vmin_ptb, vmax_ptb = -15, 16
 cmap_style = 'jet_r'
 interpo_value = 0.005
@@ -288,7 +286,7 @@ for i in range(len(prof_line)):
     
     points_value_vpt = interpn((raw_data.depth.values, raw_data.lat.values, raw_data.lon.values),
                            raw_data.vpt.values, points2d[:, [3, 1, 0]])
-    zi_vpt = griddata((points2d[:, 2], points2d[:, 3]), points_value_vpt, (xi_grid, yi_grid), method='cubic')
+    zi_vpt = griddata((points2d[:, 2], points2d[:, 3]), points_value_vpt, (xi_grid, yi_grid), method='linear')
     df = pd.DataFrame(zi_vpt)
     zi_vpttt = df.interpolate()
     zi_vpttt_ar = zi_vpttt.to_numpy()
@@ -408,4 +406,3 @@ for file in files:
     os.remove(file)
     print(f"Removed: {file}")
 
-'''
