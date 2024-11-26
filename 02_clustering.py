@@ -20,7 +20,7 @@ clean_files()
 
 # Settings
 interval_interpol = '0.002'
-gmm_clusters = 2
+gmm_clusters = 6
 cluster_method = 'GMM'
 n_init = 10
 cov_type = 'full'
@@ -99,7 +99,7 @@ cluster_data = {
 df_cluster = pd.DataFrame(cluster_data)
 df_cluster.to_csv('../cluster_results.csv', index=False)
 
-''' 
+
 # NC File Generation 
 # Here the code transfers the output file of TomoFlex (e.g., vpvstommo.dat) to NetCDF file #
 
@@ -176,4 +176,3 @@ mttt = ncout.createVariable('mt','float32',('depth','lat','lon'));mttt.setncattr
 cluterrrrrr = ncout.createVariable('clusters','float32',('depth','lat','lon'));cluterrrrrr.setncattr('units','piece');cluterrrrrr[:] = Clusterrrrs;
 ncout.close()
 
-'''
