@@ -211,6 +211,7 @@ import matplotlib.cm as cm
 import subprocess
 import glob
 import os 
+from matplotlib.patheffects import withStroke
 
 clusters_resultss = pd.read_csv('../cluster_results.csv')
 
@@ -286,7 +287,7 @@ for i in range(len(prof_line)):
     
     points_value_vpt = interpn((raw_data.depth.values, raw_data.lat.values, raw_data.lon.values),
                            raw_data.vpt.values, points2d[:, [3, 1, 0]])
-    zi_vpt = griddata((points2d[:, 2], points2d[:, 3]), points_value_vpt, (xi_grid, yi_grid), method='linear')
+    zi_vpt = griddata((points2d[:, 2], points2d[:, 3]), points_value_vpt, (xi_grid, yi_grid), method='nearest')
     df = pd.DataFrame(zi_vpt)
     zi_vpttt = df.interpolate()
     zi_vpttt_ar = zi_vpttt.to_numpy()
@@ -406,3 +407,61 @@ for file in files:
     os.remove(file)
     print(f"Removed: {file}")
 
+
+# %%
+
+
+interp_depth = 0.8
+geophysics_data = 'Vpt_ori'
+
+# 篩選深度為 0.4 的數據
+filtered_data = clusters_resultss[clusters_resultss['ZZ'] == interp_depth]
+
+# 提取經緯度和 Vp 數據
+x = filtered_data['XX']
+y = filtered_data['YY']
+z = filtered_data[geophysics_data]
+
+region = [x.min(), x.max(), y.min(), y.max()]
+
+# 將數據保存為網格文件
+grid_file = "temp_grid.nc"
+pygmt.xyz2grd(
+    data=pd.DataFrame({"x": x, "y": y, "z": z}),
+    region=region,
+    spacing=(0.002, 0.002),  # 設定網格間距
+    outgrid=grid_file,
+)
+with pygmt.config(FORMAT_GEO_MAP = 'D', FORMAT_FLOAT_OUT = '%.3f'):
+    fig = pygmt.Figure()
+    pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_ptb, vmax_ptb], reverse=True)  # 自訂顏色映射表
+
+    fig.grdimage(
+        grid=grid_file,
+        cmap=True,
+        region=region,
+        projection="M15c",
+        frame=["a"],       
+    )
+    fig.grdcontour(
+        region=region,
+        projection="M15c",
+        frame=['a'],
+        pen="0.5p,white",
+        grid = grid_file,
+        interval=5,
+        annotation=5,
+    )
+
+
+
+
+    # 添加標記文字
+    fig.text(x=region[1]-0.01, y=region[2]+0.004, text=str(interp_depth)+' km', font='30p,Helvetica-Bold,black')
+
+    # 顯示圖表
+    fig.show()
+
+    # 清理臨時文件
+    import os
+    os.remove(grid_file)
