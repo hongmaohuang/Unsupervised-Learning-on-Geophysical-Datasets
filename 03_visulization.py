@@ -482,8 +482,8 @@ for index_depth in all_depth:
                 fig.plot(x=sta_Hong_data.lon, y=sta_Hong_data.lat, style='t0.3', fill='#90A4AE', region=region, label = 'Stations', pen="0.3p,black", transparency=70)
                 fig.plot(data=LYR, color="#C7C8CC", transparency=65)
                 for i in range(len(prof_line)):
-                    name_prof_start = name_prof[i]
-                    name_prof_end = name_prof[i] + "'"
+                    name_prof_start = name_prof[i][0]
+                    name_prof_end = name_prof[i][1:3]
                     points = pygmt.project(center='{}/{}'.format(prof_line[i][0], prof_line[i][2]),
                                         endpoint='{}/{}'.format(prof_line[i][1], prof_line[i][3]),
                                         generate =0.002, unit=True)
