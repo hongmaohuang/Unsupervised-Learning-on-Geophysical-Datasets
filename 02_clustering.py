@@ -20,7 +20,7 @@ clean_files()
 
 # Settings
 interval_interpol = '0.002'
-gmm_clusters = 6
+gmm_clusters = 7
 cluster_method = 'GMM'
 n_init = 10
 cov_type = 'full'
