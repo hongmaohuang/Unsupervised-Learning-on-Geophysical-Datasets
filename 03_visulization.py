@@ -1,3 +1,4 @@
+''' 
 # %%
 import pygmt
 import numpy as np
@@ -12,6 +13,9 @@ import glob
 import os
 import geopandas as gpd
 import string 
+import matplotlib
+from scipy.interpolate import interpn, griddata
+import matplotlib.colors as mcolors
 
 clusters_resultss = pd.read_csv('../cluster_results.csv')
 raw_data = xr.open_dataset('../tomo.nc')
@@ -212,6 +216,7 @@ for file in files:
     os.remove(file)
     print(f"Removed: {file}")
 
+
 # Mapview Plot #
 
 for index_Gdata in all_geophysics_data:
@@ -241,28 +246,6 @@ for index_Gdata in all_geophysics_data:
             outgrid=grid_file,
         )
 
-        # Colorbar Plot Only #
-        #with pygmt.config(FONT_ANNOT_PRIMARY="40p", FONT_LABEL="50p", MAP_TICK_LENGTH_PRIMARY="10p", MAP_FRAME_PEN="black", MAP_TICK_PEN_PRIMARY="1.5p, black"):
-        
-        fig = pygmt.Figure()
-        if geophysics_data == 'Vpt_ori':
-            grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vpt_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-            cpt = pygmt.makecpt(cmap='jet', series=[vmin_ptb, vmax_ptb], background = "o", reverse=True)
-            fig.colorbar(frame=["a5", "x+ldVp (%)"], cmap=True, position='JBC+w100c/1c+edbf')
-            fig.savefig(f'../Fig/colorbar_Vpt_ori.png', show=False, transparent=True)
-        
-        if geophysics_data == 'Vp_ori':
-            grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vp_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-            cpt = pygmt.makecpt(cmap='jet', series=[vmin_abs, vmax_abs], background = "o", reverse=True)
-            fig.colorbar(frame=["a1", "x+lVp (km/s)"], cmap=True, position='JBC+w100c/1c+edbf')
-            fig.savefig(f'../Fig/colorbar_Vp_ori.png', show=False, transparent=True)
-
-        if geophysics_data == 'MT_ori':
-            grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.MT_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-            cpt = pygmt.makecpt(cmap='jet', series=[vmin_mt, vmax_mt], background = "o", reverse=True)
-            fig.colorbar(frame=["a0.5", "x+lLog10 resistivity (@~\127@~-m)"], cmap=True, position='JBC+w100c/1c+edbf')
-            fig.savefig(f'../Fig/colorbar_MT_ori.png', show=False, transparent=True)
-        
         with pygmt.config(FORMAT_GEO_MAP = 'D', FORMAT_FLOAT_OUT = '%.3f'):
             fig = pygmt.Figure()
 
@@ -389,6 +372,28 @@ for index_Gdata in all_geophysics_data:
             # 清理臨時文件
             os.remove(grid_file)
 
+        # Colorbar Plot Only #
+        with pygmt.config(FONT_ANNOT_PRIMARY="40p", FONT_LABEL="50p", MAP_TICK_LENGTH_PRIMARY="10p", MAP_FRAME_PEN="black", MAP_TICK_PEN_PRIMARY="1.5p, black"):
+            fig = pygmt.Figure()
+            if geophysics_data == 'Vpt_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vpt_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_ptb, vmax_ptb], background = "o", reverse=True)
+                fig.colorbar(frame=["a5", "x+ldVp (%)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_Vpt_ori.png', show=False, transparent=True)
+            
+            if geophysics_data == 'Vp_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vp_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_abs, vmax_abs], background = "o", reverse=True)
+                fig.colorbar(frame=["a1", "x+lVp (km/s)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_Vp_ori.png', show=False, transparent=True)
+
+            if geophysics_data == 'MT_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.MT_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_mt, vmax_mt], background = "o", reverse=True)
+                fig.colorbar(frame=["a0.5", "x+lLog10 resistivity (@~\127@~-m)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_MT_ori.png', show=False, transparent=True)
+
+
     # Combine all maps
     pattern = f'../Fig/{geophysics_data}_*.png'
     images = sorted(glob.glob(pattern))
@@ -401,27 +406,122 @@ for index_Gdata in all_geophysics_data:
         print(f"Removed: {file}")
     
 
-
+''' 
 # %%
-import pandas as pd
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd
+import numpy as np
+import matplotlib.ticker as mticker
+from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+from matplotlib.colors import Normalize
+from matplotlib.colorbar import ColorbarBase
+import geopandas as gpd
+import os
+from scipy.interpolate import griddata
+import matplotlib
 
-for i in range(len(colors_cluster)):
-    cluster_n = i
-    print(cluster_n)
-    cluster_filtered = clusters_resultss[(clusters_resultss.Clusters == cluster_n)]
-    # 提取需要的數據
-    x = cluster_filtered['XX']
-    y = cluster_filtered['YY']
-    z = cluster_filtered['ZZ']
+# 讀取數據
+clusters_results = pd.read_csv('../cluster_results.csv')
+sta_Hong_data = pd.read_csv('../stations.csv', delimiter=',', header=None, skiprows=1)
+sta_Hong_data.columns = ['sta', 'lon', 'lat', 'H']
+well_data = pd.read_csv('../well_all_loc_hong.csv', sep=',')
+LYR = gpd.read_file('/home/hmhuang/Research/Hongchailin/clustering_vp_mt/lanyang_poly/lanyang_poly.shp')
 
-    # 創建3D繪圖對象
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.invert_zaxis()
-    # 繪製3D散點圖
-    ax.scatter(x, y, z, c=colors_cluster[i], marker='s', s=1, alpha=0.7)
-    #ax.set_zlim([1,0])
-    fig.show()
-# %%
+output = '../Fig/'
+prof_line = [[121.67416, 121.67416, 24.715182, 24.68],
+             [121.68900, 121.68900, 24.715182, 24.68],
+             [121.70672, 121.70672, 24.715182, 24.68],
+             [121.67, 121.717, 24.7107, 24.7107],
+             [121.67, 121.717, 24.69773, 24.69773],
+             [121.67, 121.717, 24.685, 24.685]]
+all_depth = [0.2, 0.4, 0.6, 0.8]
+all_geophysics_data = ['Vpt_ori', 'Vp_ori', 'MT_ori']
+
+vmin_abs, vmax_abs = 1, 5
+vmin_mt, vmax_mt = 1, np.log10(1000)
+vmin_ptb, vmax_ptb = -15, 15
+cmap_style = 'jet_r'
+
+# 定義繪圖函數
+def plot_map(ax, data, geophysics_data, depth, region):
+    lon_min, lon_max, lat_min, lat_max = region
+
+    # 數據過濾
+    filtered_data = data[data['ZZ'] == depth]
+    x = filtered_data['XX']
+    y = filtered_data['YY']
+    z = filtered_data[geophysics_data]
+
+    # 插值數據生成網格
+    grid_x, grid_y = np.linspace(lon_min, lon_max, 50), np.linspace(lat_min, lat_max, 50)
+    grid_x, grid_y = np.meshgrid(grid_x, grid_y)
+    grid_z = griddata((x, y), z, (grid_x, grid_y), method='linear')
+
+    
+    # 繪製影像
+    if geophysics_data == 'Vpt_ori':
+        norm = Normalize(vmin=vmin_ptb, vmax=vmax_ptb)
+         
+    elif geophysics_data == 'Vp_ori':
+        norm = Normalize(vmin=vmin_abs, vmax=vmax_abs)
+        
+    elif geophysics_data == 'MT_ori':
+        norm = Normalize(vmin=vmin_mt, vmax=vmax_mt)
+    
+    im = ax.pcolormesh(grid_x, grid_y, grid_z, transform=ccrs.PlateCarree(), cmap=cmap_style, norm=norm)
+    
+    # 繪製等高線
+    contour = ax.contour(grid_x, grid_y, grid_z, levels=10, colors='w', linewidths=0.5, transform=ccrs.PlateCarree())
+    ax.clabel(contour, inline=True, fontsize=10, fmt='%1.0f')
+
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+    ax.add_feature(cfeature.BORDERS, linestyle=':')
+    ax.set_extent(region, crs=ccrs.PlateCarree())
+    gl = ax.gridlines(draw_labels=True)
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xlines = False 
+    gl.ylines = False   
+    return im
+
+# 主循環
+
+matplotlib.rcParams['font.family'] = 'Nimbus Sans'
+matplotlib.rcParams['font.size'] = 12
+
+for geophysics_data in all_geophysics_data:
+    
+    for depth in all_depth:
+        print(f"Plotting depth {depth} for {geophysics_data}...")
+
+        region = [
+            clusters_results['XX'].min(),
+            clusters_results['XX'].max(),
+            clusters_results['YY'].min(),
+            clusters_results['YY'].max()
+        ]
+
+        fig, ax = plt.subplots(subplot_kw={'projection': ccrs.Mercator()})
+        
+        im = plot_map(ax, clusters_results, geophysics_data, depth, region)
+
+        # 添加測站與井位
+        if depth == 0.8:
+            ax.scatter(sta_Hong_data['lon'], sta_Hong_data['lat'], color='blue', s=10, transform=ccrs.PlateCarree(), label='Stations')
+            ax.scatter(well_data['X'], well_data['Y'], color='red', s=10, transform=ccrs.PlateCarree(), label='Wells')
+            for i, line in enumerate(prof_line):
+                ax.plot([line[0], line[1]], [line[2], line[3]], transform=ccrs.PlateCarree(), color='black', linestyle='--')
+                ax.text(line[0], line[2], f"{chr(65 + i)}", transform=ccrs.PlateCarree())
+
+        # 添加標題與色標
+        ax.set_title(f"{geophysics_data} at Depth {depth} km")
+        #cbar = fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.05)
+        #cbar.set_label(f"{geophysics_data}")
+
+        # 保存圖表
+        output_file = os.path.join(output, f"{geophysics_data}_{depth:.1f}.png")
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        plt.close()
