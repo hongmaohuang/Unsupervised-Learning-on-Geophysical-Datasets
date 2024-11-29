@@ -19,7 +19,7 @@ def clean_files():
 clean_files()
 
 # Settings
-interval_interpol = '0.002'
+interval_interpol = '0.001'
 gmm_clusters = 7
 cluster_method = 'GMM'
 n_init = 10
