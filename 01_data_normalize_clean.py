@@ -50,8 +50,8 @@ interpolated_values_mt_vp = interpolated_values_mt/interpolated_values_vp
 '''
 
 # Define interpolation grid
-interval_interpol_hori = 0.002 # degree
-interval_interpol_vertical = 0.002 # km
+interval_interpol_hori = 0.001 # degree
+interval_interpol_vertical = 0.001 # km
 
 x_range = np.arange(121.653, 121.735, interval_interpol_hori)
 y_range = np.arange(24.666, 24.725, interval_interpol_hori)
