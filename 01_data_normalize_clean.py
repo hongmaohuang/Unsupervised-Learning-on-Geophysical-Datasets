@@ -9,49 +9,24 @@ from sklearn.preprocessing import MinMaxScaler
 import math
 import matplotlib.pyplot as plt
 
-
-
 # Load data
 mt_data = pd.read_csv('../../MT_Result/Ilan_MT3D_all.csv', sep=',')
+
 vp_data = pd.read_csv('../../V19/vpvstomo_1220.dat', delim_whitespace=True, skiprows=1)
+ckb_data = pd.read_csv('../../V19/vpvs_ckb.dat', delim_whitespace=True, skiprows=1)
 rmap_data = pd.read_csv('../../V19/vpvsrmap_1220.dat', delim_whitespace=True, skiprows=1)
+
+'''
+vp_data = pd.read_csv('/home/hmhuang/Research/Hongchailin/Test_for_visualized/vpvstomo_for_visualized_20241211.dat', delim_whitespace=True, skiprows=1)
+rmap_data = pd.read_csv('/home/hmhuang/Research/Hongchailin/Test_for_visualized/vpvsckb_for_visualized_20241211.dat', delim_whitespace=True, skiprows=1)
+'''
 
 mt_data['Elevation_m'] = mt_data['Elevation_m'] * -0.001
 
-''' 
-# Define interpolation grid
-interval_interpol_hori = 'original_resol'
-'0.002 # degree'
-interval_interpol_vertical = 'original_resol'
-'0.002  # km'
-
-x_range = vp_data.lon.unique()
-y_range = vp_data.lat.unique()
-z_target = vp_data.dep.unique()
-
-grid_x, grid_y, grid_z = np.meshgrid(x_range, y_range, z_target, indexing='ij')
-
-mt_data_filtered = mt_data[mt_data['Rho_ohm_m'] <= 10000]
-x_mt = mt_data_filtered['X_84']
-y_mt = mt_data_filtered['Y_84']
-z_mt = mt_data_filtered['Elevation_m']
-values_mt = np.log10(mt_data_filtered['Rho_ohm_m'])
-
-points_mt = np.array([x_mt, y_mt, z_mt]).T
-grid_values_mt = griddata(points_mt, values_mt, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
-
-all_geophysical_data =  vp_data
-all_geophysical_data['interpolated_mt'] = griddata(points_mt, values_mt, (vp_data['lon'], vp_data['lat'], vp_data['dep']), method='linear', fill_value=np.nan)
-
-interpolated_values_vp = all_geophysical_data.vp
-interpolated_values_mt = all_geophysical_data.interpolated_mt
-interpolated_values_vpt = all_geophysical_data.vpt
-interpolated_values_mt_vp = interpolated_values_mt/interpolated_values_vp
-'''
 
 # Define interpolation grid
-interval_interpol_hori = 0.0005 # degree
-interval_interpol_vertical = 0.0005 # km
+interval_interpol_hori = 0.001 # degree
+interval_interpol_vertical = 0.001 # km
 
 x_range = np.arange(121.653, 121.735, interval_interpol_hori)
 y_range = np.arange(24.666, 24.725, interval_interpol_hori)
@@ -63,6 +38,8 @@ y = vp_data['lat']
 z = vp_data['dep']
 values_vpt = vp_data['vpt']
 values_vp = vp_data['vp']
+value_ckb = ckb_data['vpt']
+value_resol = rmap_data['resol_p']
 
 # Create meshgrid for interpolation
 grid_x, grid_y, grid_z = np.meshgrid(x_range, y_range, z_target, indexing='ij')
@@ -74,6 +51,11 @@ points = np.array([x, y, z]).T
 grid_values_vpt = griddata(points, values_vpt, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
 # Interpolate Vp values onto the new grid
 grid_values_vp = griddata(points, values_vp, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
+# Interpolate CKB values onto the new grid
+grid_values_ckb = griddata(points, value_ckb, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
+# Interpolate Resolution values onto the new grid
+grid_values_resol = griddata(points, value_resol, (grid_x, grid_y, grid_z), method='linear', fill_value=np.nan)
+
 
 # Extracting x, y, z, and values for interpolation from mt_data
 mt_data_filtered = mt_data[mt_data['Rho_ohm_m'] <= 5000]
@@ -92,6 +74,8 @@ interpolated_values_vp = grid_values_vp.flatten()
 interpolated_values_mt = grid_values_mt.flatten()
 interpolated_values_vpt = grid_values_vpt.flatten()
 interpolated_values_mt_vp = interpolated_values_mt/interpolated_values_vp
+interpolated_values_ckb = grid_values_ckb.flatten()
+interpolated_values_resol = grid_values_resol.flatten()
 
 # Normalize the interpolated values to 0-1
 scaler = MinMaxScaler()
@@ -122,6 +106,9 @@ data = {
     'Vp': interpolated_values_vp[valid_mask],
     'Resis': interpolated_values_mt[valid_mask],
     'Vpt': interpolated_values_vpt[valid_mask],
+    'CKB': interpolated_values_ckb[valid_mask],
+    'Resolution': interpolated_values_resol[valid_mask],
+    'Resis_Vp': interpolated_values_mt_vp[valid_mask],
     'Vp_norm': normalized_values_vp[valid_mask],
     'Resis_norm': normalized_values_mt[valid_mask],
     'Vpt_norm': normalized_values_vpt[valid_mask],
@@ -130,3 +117,5 @@ data = {
 
 threeD_df = pd.DataFrame(data)
 threeD_df.to_csv('../data_nona_' + str(interval_interpol_vertical) + '.csv', index=False)
+
+# %%
