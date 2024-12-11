@@ -16,8 +16,10 @@ import matplotlib
 from scipy.interpolate import interpn, griddata
 import matplotlib.colors as mcolors
 
-clusters_resultss = pd.read_csv('../cluster_results.csv')
-raw_data = xr.open_dataset('../tomo.nc')
+clusters_resultss = pd.read_csv('../cluster_results.csv') #For Map Plot
+all_depth = [0.2, 0.4, 0.6, 0.8]
+all_geophysics_data = ['Vpt_ori', 'Vp_ori', 'MT_ori', 'CKB_in_Vpt']
+raw_data = xr.open_dataset('../tomo.nc') #For Profile Plot
 sta_Hong_path = '../stations.csv'
 sta_Hong_data = pd.read_csv(sta_Hong_path, delimiter=',', header=None, skiprows=1)
 sta_Hong_data.columns = ['sta', 'lon', 'lat', 'H']
@@ -32,8 +34,7 @@ prof_line = [[121.67416, 121.67416, 24.715182, 24.68],
              [121.67, 121.717 , 24.69773, 24.69773],
              [121.67, 121.717 , 24.685, 24.685],
              ]
-all_depth = [0.2, 0.4, 0.6, 0.8]
-all_geophysics_data = ['Vpt_ori', 'Vp_ori', 'MT_ori']
+
 
 uppercase_letters = string.ascii_uppercase
 name_prof = [f"{letter}{letter}'" for letter in uppercase_letters]
@@ -52,7 +53,7 @@ vmin_mt, vmax_mt = 1, math.log10(1000)
 vmin_ptb, vmax_ptb = -15, 15
 cmap_style = 'jet_r'
 interpo_value = 0.005
-ckb ='n'
+colorbar ='n'
 
 colors = cm.Set3.colors
 deep_yellow = cm.Set3.colors[-1]
@@ -65,7 +66,223 @@ colors_cluster = colors_cluster_all[0:int(cluster_number)]
 depth = np.arange(prof_range_plot[1], prof_range_plot[0], 0.01)
 points2d = np.empty([0, 4])
 
+# Mapview Plot #
+for index_Gdata in all_geophysics_data:
+
+    geophysics_data = index_Gdata
+
+    for index_depth in all_depth:
+        print(f'depth plot now: {index_depth}')
+        interp_depth = index_depth
+
+        # 篩選深度
+        filtered_data = clusters_resultss[clusters_resultss['ZZ'] == interp_depth]
+
+        # 提取經緯度和數據
+        x = filtered_data['XX']
+        y = filtered_data['YY']
+        filtered_data[geophysics_data][filtered_data.Resolution<0.6] = np.nan
+        z = filtered_data[geophysics_data]
+
+        region = [x.min(), x.max(), y.min(), y.max()]
+
+        # 將數據保存為網格文件
+        grid_file = "temp_grid.nc"
+        pygmt.xyz2grd(
+            data=pd.DataFrame({"x": x, "y": y, "z": z}),
+            region=region,
+            spacing=(0.002, 0.002),  # 設定網格間距
+            outgrid=grid_file,
+        )
+
+        with pygmt.config(FORMAT_GEO_MAP = 'D', FORMAT_FLOAT_OUT = '%.3f'):
+            fig = pygmt.Figure()
+
+            if geophysics_data == 'Vpt_ori':
+                pygmt.config(COLOR_NAN="255/255/255") 
+                pygmt.makecpt(cmap='jet', background = 'o', series=[vmin_ptb, vmax_ptb, 0.5], reverse=True, overrule_bg=True, output='color.cpt')
+
+                fig.grdimage(
+                    grid=grid_file,
+                    cmap='color.cpt',
+                    region=region,
+                    projection="M15c",
+                    frame=["a"]   
+                )
+                
+                if colorbar == 'y':
+                    fig.colorbar(frame=["a", "x+ldVp (%)"], position="JBC+w15c/0.5c+e")
+
+                fig.grdcontour(
+                    region=region,
+                    projection="M15c",
+                    frame=['a'],
+                    pen="0.5p,white",
+                    grid = grid_file,
+                    interval=5,
+                    annotation=5,
+                )
+
+                if interp_depth == 0.8:
+                    map_width_cm = 15
+                    lon_min, lon_max = region[0], region[1]  
+                    lat_min, lat_max = region[2], region[3]  
+                    map_lon_range_cm = map_width_cm
+                    map_lat_range_cm = map_width_cm * (lat_max - lat_min) / (lon_max - lon_min)
+                    lon_diff_degree = 1  
+                    lat_diff_degree = 1  
+                    lon_diff_cm = lon_diff_degree / (lon_max - lon_min) * map_lon_range_cm
+                    lat_diff_cm = lat_diff_degree / (lat_max - lat_min) * map_lat_range_cm
+
+                    fig.plot(x=121.698, y=24.7041, style="l13p+tLanyang River+fHelvetica-BoldOblique,white", pen="0.3p", fill="black", transparency=70)
+                    fig.text(text="W1", x=HCL1[0], y=HCL1[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
+                    fig.text(text="W2", x=HCL2[0], y=HCL2[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
+                    fig.text(text="CTCN", x=CTCN[0], y=CTCN[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
+
+                    fig.plot(x=sta_Hong_data.lon, y=sta_Hong_data.lat, style='t0.3', fill='#90A4AE', region=region, label = 'Stations', pen="0.3p,black", transparency=70)
+                    fig.plot(data=LYR, color="#C7C8CC", transparency=65)
+                    for i in range(len(prof_line)):
+                        name_prof_start = name_prof[i][0]
+                        name_prof_end = name_prof[i][1:3]
+                        points = pygmt.project(center='{}/{}'.format(prof_line[i][0], prof_line[i][2]),
+                                            endpoint='{}/{}'.format(prof_line[i][1], prof_line[i][3]),
+                                            generate =0.002, unit=True)
+                        if prof_line[i][2]==prof_line[i][3] :
+                            fig.text(text=name_prof_start, x = points.r.min()-0.0025, y = points.s.max(), font="15p,8,black", transparency=20)
+                            fig.text(text=name_prof_end, x = points.r.max()+0.004, y = points.s.min(), font="15p,8,black", transparency=20)
+                            length = [(prof_line[i][1] - prof_line[i][0])*lon_diff_cm]
+                            angle = [0]
+                            #print(length, angle)
+                            fig.plot(x = prof_line[i][0], y = prof_line[i][2], style="v0.2c+bt+et+a80", direction=(angle, length), pen = "0.4p" )
+
+                        else:
+                            fig.text(text=name_prof_start, x = points.r.max(), y = points.s.max()+0.0025, font="15p,8,black", transparency=20)
+                            fig.text(text=name_prof_end, x = points.r.min(), y = points.s.min()+0.001, font="15p,8,black", transparency=20)
+                            length = [(points.s.max() - points.s.min())*lat_diff_cm]
+                            angle = [270]
+                            fig.plot(x = prof_line[i][0], y = prof_line[i][2], style="v0.2c+bt+et+a80", direction=(angle, length), pen = "0.4p")
+            
+            if geophysics_data == 'Vp_ori':
+
+                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_abs, vmax_abs], reverse=True) 
+                fig.grdimage(
+                    grid=grid_file,
+                    cmap=True,
+                    region=region,
+                    projection="M15c",
+                    frame=["a"],       
+                )
+                fig.grdcontour(
+                    region=region,
+                    projection="M15c",
+                    frame=['a'],
+                    pen="0.5p,white",
+                    grid = grid_file,
+                    interval=0.3,
+                    annotation=1,
+                )
+                if colorbar == 'y':
+                    fig.colorbar(frame=["a", "x+lVp (km/s)"], position="JBC+w15c/0.5c+e")
+
+            if geophysics_data == 'CKB_in_Vpt':
+
+                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_ptb, vmax_ptb], reverse=True) 
+                fig.grdimage(
+                    grid=grid_file,
+                    cmap=True,
+                    region=region,
+                    projection="M15c",
+                    frame=["a"],       
+                )
+                fig.grdcontour(
+                    region=region,
+                    projection="M15c",
+                    frame=['a'],
+                    pen="0.5p,white",
+                    grid = grid_file,
+                    interval=5,
+                    annotation=5,
+                )
+                if colorbar == 'y':
+                    fig.colorbar(frame=["a", "x+ldVp (%)"], position="JBC+w15c/0.5c+e")
+
+            if geophysics_data == 'MT_ori':
+
+                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_mt, vmax_mt], reverse=True) 
+                fig.grdimage(
+                    grid=grid_file,
+                    cmap=True,
+                    region=region,
+                    projection="M15c",
+                    frame=["a"],       
+                )
+                fig.grdcontour(
+                    region=region,
+                    projection="M15c",
+                    frame=['a'],
+                    pen="0.5p,white",
+                    grid = grid_file,
+                    interval=0.5,
+                    annotation=1,
+                )
+                if colorbar == 'y':
+                    fig.colorbar(frame=["a", "x+lLog10 resistivity (@~\127@~-m)"], position="JBC+w15c/0.5c+e")
+
+
+            HCL1 = well_data[well_data.ID=='HCL-1T'].iloc[0].X, well_data[well_data.ID=='HCL-1T'].iloc[0].Y
+            HCL2 = well_data[well_data.ID=='HCL-2T'].iloc[0].X, well_data[well_data.ID=='HCL-2T'].iloc[0].Y
+            CTCN = well_data[well_data.ID=='CTCN'].iloc[0].X, well_data[well_data.ID=='CTCN'].iloc[0].Y
+
+            fig.plot(x = HCL1[0], y = HCL1[1], style='s9p', fill='gray', pen="0.5p,white")
+            fig.plot(x = HCL2[0], y = HCL2[1], style='s9p', fill='gray', pen="0.5p,white")
+            fig.plot(x = CTCN[0], y = CTCN[1], style='s9p', fill='gray', pen="0.5p,white")
+
+            fig.plot(x = well_data.X.iloc[-1], y = well_data.Y.iloc[-1], style='s9p', fill='gray', pen="0.5p,white")
+
+            # 添加標記文字
+            fig.text(x=region[1]-0.01, y=region[2]+0.004, text=str(interp_depth)+' km', font='30p,Helvetica-Bold,black')
+
+            # 顯示圖表
+            fig.savefig(f'../Fig/{geophysics_data}_{interp_depth}.png', show=False, transparent=True)
+
+            # 清理臨時文件
+            os.remove(grid_file)
+
+        # Colorbar Plot Only #
+        with pygmt.config(FONT_ANNOT_PRIMARY="40p", FONT_LABEL="50p", MAP_TICK_LENGTH_PRIMARY="10p", MAP_FRAME_PEN="black", MAP_TICK_PEN_PRIMARY="1.5p, black"):
+            fig = pygmt.Figure()
+            if geophysics_data == 'Vpt_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vpt_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_ptb, vmax_ptb], background = "o", reverse=True)
+                fig.colorbar(frame=["a5", "x+ldVp (%)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_Vpt_ori.png', show=False, transparent=True)
+            
+            if geophysics_data == 'Vp_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vp_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_abs, vmax_abs], background = "o", reverse=True)
+                fig.colorbar(frame=["a1", "x+lVp (km/s)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_Vp_ori.png', show=False, transparent=True)
+
+            if geophysics_data == 'MT_ori':
+                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.MT_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
+                cpt = pygmt.makecpt(cmap='jet', series=[vmin_mt, vmax_mt], background = "o", reverse=True)
+                fig.colorbar(frame=["a0.5", "x+lLog10 resistivity (@~\127@~-m)"], cmap=True, position='JBC+w100c/1c+edbf')
+                fig.savefig(f'../Fig/colorbar_MT_ori.png', show=False, transparent=True)
+
+
+    # Combine all maps
+    pattern = f'../Fig/{geophysics_data}_*.png'
+    images = sorted(glob.glob(pattern))
+    args = ["montage", "-geometry", "+0+0", "-tile", "4x1"] + images + [f'../Fig/maps_{geophysics_data}.png']
+    subprocess.run(args)
+    
+    files = glob.glob(pattern)
+    for file in files:
+        os.remove(file)
+        print(f"Removed: {file}")
+    
 # %%
+
 # Cross-Sections Plot #
 matplotlib.rcParams['font.family'] = 'Nimbus Sans'
 matplotlib.rcParams['font.size'] = 25
@@ -214,194 +431,4 @@ files = glob.glob('../Fig/' + cluster_method + '_*.png')
 for file in files:
     os.remove(file)
     print(f"Removed: {file}")
-
-
-# Mapview Plot #
-
-for index_Gdata in all_geophysics_data:
-
-    geophysics_data = index_Gdata
-
-    for index_depth in all_depth:
-        print(f'depth plot now: {index_depth}')
-        interp_depth = index_depth
-
-        # 篩選深度
-        filtered_data = clusters_resultss[clusters_resultss['ZZ'] == interp_depth]
-
-        # 提取經緯度和數據
-        x = filtered_data['XX']
-        y = filtered_data['YY']
-        z = filtered_data[geophysics_data]
-
-        region = [x.min(), x.max(), y.min(), y.max()]
-
-        # 將數據保存為網格文件
-        grid_file = "temp_grid.nc"
-        pygmt.xyz2grd(
-            data=pd.DataFrame({"x": x, "y": y, "z": z}),
-            region=region,
-            spacing=(0.002, 0.002),  # 設定網格間距
-            outgrid=grid_file,
-        )
-
-        with pygmt.config(FORMAT_GEO_MAP = 'D', FORMAT_FLOAT_OUT = '%.3f'):
-            fig = pygmt.Figure()
-
-            if geophysics_data == 'Vpt_ori':
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_ptb, vmax_ptb], reverse=True) 
-                
-                fig.grdimage(
-                    grid=grid_file,
-                    cmap=True,
-                    region=region,
-                    projection="M15c",
-                    frame=["a"],       
-                )
-                fig.grdcontour(
-                    region=region,
-                    projection="M15c",
-                    frame=['a'],
-                    pen="0.5p,white",
-                    grid = grid_file,
-                    interval=5,
-                    annotation=5,
-                )
-                if ckb == 'y':
-                    fig.colorbar(frame=["a", "x+ldVp (%)"], position="JBC+w15c/0.5c+e")
-                if interp_depth == 0.8:
-                    map_width_cm = 15
-                    lon_min, lon_max = region[0], region[1]  
-                    lat_min, lat_max = region[2], region[3]  
-                    map_lon_range_cm = map_width_cm
-                    map_lat_range_cm = map_width_cm * (lat_max - lat_min) / (lon_max - lon_min)
-                    lon_diff_degree = 1  
-                    lat_diff_degree = 1  
-                    lon_diff_cm = lon_diff_degree / (lon_max - lon_min) * map_lon_range_cm
-                    lat_diff_cm = lat_diff_degree / (lat_max - lat_min) * map_lat_range_cm
-
-                    fig.plot(x=121.698, y=24.7041, style="l13p+tLanyang River+fHelvetica-BoldOblique,white", pen="0.3p", fill="black", transparency=70)
-                    fig.text(text="W1", x=HCL1[0], y=HCL1[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
-                    fig.text(text="W2", x=HCL2[0], y=HCL2[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
-                    fig.text(text="CTCN", x=CTCN[0], y=CTCN[1]+0.0015, font="10p,31,black", transparency=80, fill="white")
-
-                    fig.plot(x=sta_Hong_data.lon, y=sta_Hong_data.lat, style='t0.3', fill='#90A4AE', region=region, label = 'Stations', pen="0.3p,black", transparency=70)
-                    fig.plot(data=LYR, color="#C7C8CC", transparency=65)
-                    for i in range(len(prof_line)):
-                        name_prof_start = name_prof[i][0]
-                        name_prof_end = name_prof[i][1:3]
-                        points = pygmt.project(center='{}/{}'.format(prof_line[i][0], prof_line[i][2]),
-                                            endpoint='{}/{}'.format(prof_line[i][1], prof_line[i][3]),
-                                            generate =0.002, unit=True)
-                        if prof_line[i][2]==prof_line[i][3] :
-                            fig.text(text=name_prof_start, x = points.r.min()-0.0025, y = points.s.max(), font="15p,8,black", transparency=20)
-                            fig.text(text=name_prof_end, x = points.r.max()+0.004, y = points.s.min(), font="15p,8,black", transparency=20)
-                            length = [(prof_line[i][1] - prof_line[i][0])*lon_diff_cm]
-                            angle = [0]
-                            #print(length, angle)
-                            fig.plot(x = prof_line[i][0], y = prof_line[i][2], style="v0.2c+bt+et+a80", direction=(angle, length), pen = "0.4p" )
-
-                        else:
-                            fig.text(text=name_prof_start, x = points.r.max(), y = points.s.max()+0.0025, font="15p,8,black", transparency=20)
-                            fig.text(text=name_prof_end, x = points.r.min(), y = points.s.min()+0.001, font="15p,8,black", transparency=20)
-                            length = [(points.s.max() - points.s.min())*lat_diff_cm]
-                            angle = [270]
-                            fig.plot(x = prof_line[i][0], y = prof_line[i][2], style="v0.2c+bt+et+a80", direction=(angle, length), pen = "0.4p")
-
-            if geophysics_data == 'Vp_ori':
-
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_abs, vmax_abs], reverse=True) 
-                fig.grdimage(
-                    grid=grid_file,
-                    cmap=True,
-                    region=region,
-                    projection="M15c",
-                    frame=["a"],       
-                )
-                fig.grdcontour(
-                    region=region,
-                    projection="M15c",
-                    frame=['a'],
-                    pen="0.5p,white",
-                    grid = grid_file,
-                    interval=0.3,
-                    annotation=1,
-                )
-                if ckb == 'y':
-                    fig.colorbar(frame=["a", "x+lVp (km/s)"], position="JBC+w15c/0.5c+e")
-
-            if geophysics_data == 'MT_ori':
-
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_mt, vmax_mt], reverse=True) 
-                fig.grdimage(
-                    grid=grid_file,
-                    cmap=True,
-                    region=region,
-                    projection="M15c",
-                    frame=["a"],       
-                )
-                fig.grdcontour(
-                    region=region,
-                    projection="M15c",
-                    frame=['a'],
-                    pen="0.5p,white",
-                    grid = grid_file,
-                    interval=0.5,
-                    annotation=1,
-                )
-                if ckb == 'y':
-                    fig.colorbar(frame=["a", "x+lLog10 resistivity (@~\127@~-m)"], position="JBC+w15c/0.5c+e")
-
-            HCL1 = well_data[well_data.ID=='HCL-1T'].iloc[0].X, well_data[well_data.ID=='HCL-1T'].iloc[0].Y
-            HCL2 = well_data[well_data.ID=='HCL-2T'].iloc[0].X, well_data[well_data.ID=='HCL-2T'].iloc[0].Y
-            CTCN = well_data[well_data.ID=='CTCN'].iloc[0].X, well_data[well_data.ID=='CTCN'].iloc[0].Y
-
-            fig.plot(x = HCL1[0], y = HCL1[1], style='s9p', fill='gray', pen="0.5p,white")
-            fig.plot(x = HCL2[0], y = HCL2[1], style='s9p', fill='gray', pen="0.5p,white")
-            fig.plot(x = CTCN[0], y = CTCN[1], style='s9p', fill='gray', pen="0.5p,white")
-
-            fig.plot(x = well_data.X.iloc[-1], y = well_data.Y.iloc[-1], style='s9p', fill='gray', pen="0.5p,white")
-
-            # 添加標記文字
-            fig.text(x=region[1]-0.01, y=region[2]+0.004, text=str(interp_depth)+' km', font='30p,Helvetica-Bold,black')
-
-            # 顯示圖表
-            fig.savefig(f'../Fig/{geophysics_data}_{interp_depth}.png', show=False, transparent=True)
-
-            # 清理臨時文件
-            os.remove(grid_file)
-
-        # Colorbar Plot Only #
-        with pygmt.config(FONT_ANNOT_PRIMARY="40p", FONT_LABEL="50p", MAP_TICK_LENGTH_PRIMARY="10p", MAP_FRAME_PEN="black", MAP_TICK_PEN_PRIMARY="1.5p, black"):
-            fig = pygmt.Figure()
-            if geophysics_data == 'Vpt_ori':
-                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vpt_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-                cpt = pygmt.makecpt(cmap='jet', series=[vmin_ptb, vmax_ptb], background = "o", reverse=True)
-                fig.colorbar(frame=["a5", "x+ldVp (%)"], cmap=True, position='JBC+w100c/1c+edbf')
-                fig.savefig(f'../Fig/colorbar_Vpt_ori.png', show=False, transparent=True)
-            
-            if geophysics_data == 'Vp_ori':
-                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.Vp_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-                cpt = pygmt.makecpt(cmap='jet', series=[vmin_abs, vmax_abs], background = "o", reverse=True)
-                fig.colorbar(frame=["a1", "x+lVp (km/s)"], cmap=True, position='JBC+w100c/1c+edbf')
-                fig.savefig(f'../Fig/colorbar_Vp_ori.png', show=False, transparent=True)
-
-            if geophysics_data == 'MT_ori':
-                grid_Vp = pygmt.surface(x = filtered_data.XX, y = filtered_data.YY, z = filtered_data.MT_ori, region=region, spacing=0.0003 ,convergence=0,  verbose=True, tension=0)
-                cpt = pygmt.makecpt(cmap='jet', series=[vmin_mt, vmax_mt], background = "o", reverse=True)
-                fig.colorbar(frame=["a0.5", "x+lLog10 resistivity (@~\127@~-m)"], cmap=True, position='JBC+w100c/1c+edbf')
-                fig.savefig(f'../Fig/colorbar_MT_ori.png', show=False, transparent=True)
-
-
-    # Combine all maps
-    pattern = f'../Fig/{geophysics_data}_*.png'
-    images = sorted(glob.glob(pattern))
-    args = ["montage", "-geometry", "+0+0", "-tile", "4x1"] + images + [f'../Fig/maps_{geophysics_data}.png']
-    subprocess.run(args)
-    
-    files = glob.glob(pattern)
-    for file in files:
-        os.remove(file)
-        print(f"Removed: {file}")
-    
 
