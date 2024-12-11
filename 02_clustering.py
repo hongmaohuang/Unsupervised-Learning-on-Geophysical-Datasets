@@ -41,10 +41,9 @@ max_clusters = 30
 # Load data
 data_nona = pd.read_csv(f'../data_nona_{interval_interpol}.csv')
 
-
 # Data processing
 df = pd.DataFrame(data_nona)
-df = df.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm'])
+df = df.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm', 'Resolution', 'Resis_Vp', 'CKB'])
 data = df.values
 data_trans = np.transpose(data)
 data = data_trans
@@ -94,15 +93,16 @@ cluster_data = {
     'Vp_ori': data_nona['Vp'],
     'MT_ori': data_nona['Resis'],
     'Vpt_ori': data_nona['Vpt'],
+    'Ohm_Vp_ratio_ori': data_nona['Resis_Vp'],
+    'CKB_in_Vpt': data_nona['CKB'],
+    'Resolution': data_nona['Resolution'],
     'clustering_method': [cluster_method] * len(data_nona)
 }
 df_cluster = pd.DataFrame(cluster_data)
 df_cluster.to_csv('../cluster_results.csv', index=False)
-
-
 # NC File Generation 
 # Here the code transfers the output file of TomoFlex (e.g., vpvstommo.dat) to NetCDF file #
-
+#data = pd.read_csv('../cluster_results.csv')
 data = df_cluster
 Depth_all = sorted(data.ZZ.unique())
 ndepth = len(Depth_all)
@@ -163,6 +163,47 @@ for i in Depth_all:
         new.append(row)
     Clusterrrrs.append(new)
 
+ckbbbb = []
+for i in Depth_all:
+    filtered_data_dep = data[data['ZZ'] == i]
+    new = []
+    for j in lat:
+        filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
+        row = list(filtered_data_lat.CKB_in_Vpt)
+        # If the length of row is smaller than nx, then add nan at the end of row
+        if len(row) < nx:
+            row.extend([np.nan] * (nx - len(row)))
+        new.append(row)
+    ckbbbb.append(new)
+
+
+Resolutionnnn = []
+for i in Depth_all:
+    filtered_data_dep = data[data['ZZ'] == i]
+    new = []
+    for j in lat:
+        filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
+        row = list(filtered_data_lat.Resolution)
+        # If the length of row is smaller than nx, then add nan at the end of row
+        if len(row) < nx:
+            row.extend([np.nan] * (nx - len(row)))
+        new.append(row)
+    Resolutionnnn.append(new)
+
+resistvpppp = []
+for i in Depth_all:
+    filtered_data_dep = data[data['ZZ'] == i]
+    new = []
+    for j in lat:
+        filtered_data_lat = filtered_data_dep[filtered_data_dep['YY']==j]
+        row = list(filtered_data_lat.Ohm_Vp_ratio_ori)
+        # If the length of row is smaller than nx, then add nan at the end of row
+        if len(row) < nx:
+            row.extend([np.nan] * (nx - len(row)))
+        new.append(row)
+    resistvpppp.append(new)
+
+
 ncout = Dataset('../tomo.nc','w','NETCDF3'); # using netCDF3 for output format 
 ncout.createDimension('lon',nx);
 ncout.createDimension('lat',ny);
@@ -174,5 +215,9 @@ vp = ncout.createVariable('vp','float32',('depth','lat','lon'));vp.setncattr('un
 vpttt = ncout.createVariable('vpt','float32',('depth','lat','lon'));vpttt.setncattr('units','%');vpttt[:] = Vpppttttout;
 mttt = ncout.createVariable('mt','float32',('depth','lat','lon'));mttt.setncattr('units','ohm-m');mttt[:] = Mtttout;
 cluterrrrrr = ncout.createVariable('clusters','float32',('depth','lat','lon'));cluterrrrrr.setncattr('units','piece');cluterrrrrr[:] = Clusterrrrs;
+resistvpppppppp = ncout.createVariable('resist_vp','float32',('depth','lat','lon'));resistvpppppppp.setncattr('units','ohm-m/m/s');resistvpppppppp[:] = resistvpppp;
+Resolutionnnnnnn = ncout.createVariable('resolution','float32',('depth','lat','lon'));Resolutionnnnnnn.setncattr('units','na');Resolutionnnnnnn[:] = Resolutionnnn;
+ckbbbbbbb = ncout.createVariable('CKB','float32',('depth','lat','lon'));ckbbbbbbb.setncattr('units','%');ckbbbbbbb[:] = ckbbbb;
+
 ncout.close()
 
