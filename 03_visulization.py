@@ -17,7 +17,7 @@ from scipy.interpolate import interpn, griddata
 import matplotlib.colors as mcolors
 
 clusters_resultss = pd.read_csv('../cluster_results.csv') #For Map Plot
-all_depth = [0.2, 0.4, 0.6, 0.8]
+all_depth = [0.2, 0.4, 0.6]
 all_geophysics_data = ['Vpt_ori', 'Vp_ori', 'MT_ori', 'CKB_in_Vpt']
 raw_data = xr.open_dataset('../tomo.nc') #For Profile Plot
 sta_Hong_path = '../stations.csv'
@@ -26,6 +26,7 @@ sta_Hong_data.columns = ['sta', 'lon', 'lat', 'H']
 well_data = pd.read_csv('../well_all_loc_hong.csv', sep=',')
 LYR = gpd.read_file('/home/hmhuang/Research/Hongchailin/clustering_vp_mt/lanyang_poly/lanyang_poly.shp')
 output = '../Fig/'
+Resolution_threshold = 0.4
 
 prof_line = [[121.67416, 121.67416, 24.715182, 24.68],
              [121.68900, 121.68900, 24.715182, 24.68],
@@ -65,7 +66,7 @@ colors_cluster = colors_cluster_all[0:int(cluster_number)]
 
 depth = np.arange(prof_range_plot[1], prof_range_plot[0], 0.01)
 points2d = np.empty([0, 4])
-
+# %%
 # Mapview Plot #
 for index_Gdata in all_geophysics_data:
 
@@ -81,7 +82,7 @@ for index_Gdata in all_geophysics_data:
         # 提取經緯度和數據
         x = filtered_data['XX']
         y = filtered_data['YY']
-        filtered_data[geophysics_data][filtered_data.Resolution<0.6] = np.nan
+        filtered_data[geophysics_data][filtered_data.Resolution<Resolution_threshold] = np.nan
         z = filtered_data[geophysics_data]
 
         region = [x.min(), x.max(), y.min(), y.max()]
@@ -101,7 +102,7 @@ for index_Gdata in all_geophysics_data:
             if geophysics_data == 'Vpt_ori':
                 pygmt.config(COLOR_NAN="255/255/255") 
                 pygmt.makecpt(cmap='jet', background = 'o', series=[vmin_ptb, vmax_ptb, 0.5], reverse=True, overrule_bg=True, output='color.cpt')
-
+                print('hello!') 
                 fig.grdimage(
                     grid=grid_file,
                     cmap='color.cpt',
@@ -122,7 +123,8 @@ for index_Gdata in all_geophysics_data:
                     interval=5,
                     annotation=5,
                 )
-
+                
+                
                 if interp_depth == 0.8:
                     map_width_cm = 15
                     lon_min, lon_max = region[0], region[1]  
@@ -161,13 +163,13 @@ for index_Gdata in all_geophysics_data:
                             length = [(points.s.max() - points.s.min())*lat_diff_cm]
                             angle = [270]
                             fig.plot(x = prof_line[i][0], y = prof_line[i][2], style="v0.2c+bt+et+a80", direction=(angle, length), pen = "0.4p")
-            
+               
             if geophysics_data == 'Vp_ori':
-
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_abs, vmax_abs], reverse=True) 
+                pygmt.config(COLOR_NAN="255/255/255") 
+                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_abs, vmax_abs], reverse=True, overrule_bg=True, output='color_vp.cpt')
                 fig.grdimage(
                     grid=grid_file,
-                    cmap=True,
+                    cmap='color_vp.cpt',
                     region=region,
                     projection="M15c",
                     frame=["a"],       
@@ -186,10 +188,9 @@ for index_Gdata in all_geophysics_data:
 
             if geophysics_data == 'CKB_in_Vpt':
 
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_ptb, vmax_ptb], reverse=True) 
                 fig.grdimage(
                     grid=grid_file,
-                    cmap=True,
+                    cmap='color.cpt',
                     region=region,
                     projection="M15c",
                     frame=["a"],       
@@ -207,11 +208,11 @@ for index_Gdata in all_geophysics_data:
                     fig.colorbar(frame=["a", "x+ldVp (%)"], position="JBC+w15c/0.5c+e")
 
             if geophysics_data == 'MT_ori':
-
-                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_mt, vmax_mt], reverse=True) 
+                pygmt.config(COLOR_NAN="255/255/255") 
+                pygmt.makecpt(cmap='jet', background = 'o',series=[vmin_mt, vmax_mt], reverse=True, overrule_bg=True, output='color_mt.cpt')
                 fig.grdimage(
                     grid=grid_file,
-                    cmap=True,
+                    cmap='color_mt.cpt',
                     region=region,
                     projection="M15c",
                     frame=["a"],       
@@ -227,8 +228,7 @@ for index_Gdata in all_geophysics_data:
                 )
                 if colorbar == 'y':
                     fig.colorbar(frame=["a", "x+lLog10 resistivity (@~\127@~-m)"], position="JBC+w15c/0.5c+e")
-
-
+            
             HCL1 = well_data[well_data.ID=='HCL-1T'].iloc[0].X, well_data[well_data.ID=='HCL-1T'].iloc[0].Y
             HCL2 = well_data[well_data.ID=='HCL-2T'].iloc[0].X, well_data[well_data.ID=='HCL-2T'].iloc[0].Y
             CTCN = well_data[well_data.ID=='CTCN'].iloc[0].X, well_data[well_data.ID=='CTCN'].iloc[0].Y
