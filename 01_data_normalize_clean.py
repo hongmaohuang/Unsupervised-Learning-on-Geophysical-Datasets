@@ -11,16 +11,27 @@ import matplotlib.pyplot as plt
 
 # Load data
 mt_data = pd.read_csv('../../MT_Result/Ilan_MT3D_all.csv', sep=',')
-
+'''
 vp_data = pd.read_csv('../../V19/vpvstomo_1220.dat', delim_whitespace=True, skiprows=1)
 ckb_data = pd.read_csv('../../V19/vpvs_ckb.dat', delim_whitespace=True, skiprows=1)
 rmap_data = pd.read_csv('../../V19/vpvsrmap_1220.dat', delim_whitespace=True, skiprows=1)
-
 '''
+
 vp_data = pd.read_csv('/home/hmhuang/Research/Hongchailin/Test_for_visualized/vpvstomo_for_visualized_20241211.dat', delim_whitespace=True, skiprows=1)
+ckb_data = pd.read_csv('/home/hmhuang/Research/Hongchailin/Test_for_visualized/vpvstomo_for_visualized_20241211.dat', delim_whitespace=True, skiprows=1)
 rmap_data = pd.read_csv('/home/hmhuang/Research/Hongchailin/Test_for_visualized/vpvsckb_for_visualized_20241211.dat', delim_whitespace=True, skiprows=1)
-'''
 
+def apply_filters(data):
+    return data[(data['lon'] > 121.653) & (data['lon'] < 121.735) &
+                (data['lat'] > 24.666) & (data['lat'] < 24.725) &
+                (data['dep'] < 2) & (data['dep'] > -1)]
+
+# 對每個 DataFrame 應用函數
+vp_data = apply_filters(vp_data)
+ckb_data = apply_filters(ckb_data)
+rmap_data = apply_filters(rmap_data)
+
+# %%
 mt_data['Elevation_m'] = mt_data['Elevation_m'] * -0.001
 
 
