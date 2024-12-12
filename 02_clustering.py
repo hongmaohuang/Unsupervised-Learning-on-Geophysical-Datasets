@@ -43,8 +43,11 @@ data_nona = pd.read_csv(f'../data_nona_{interval_interpol}.csv')
 
 # Data processing
 df = pd.DataFrame(data_nona)
+df_filtered = df[df['Resolution'] >= 0.6]
 df = df.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm', 'Resolution', 'Resis_Vp', 'CKB'])
+#df = df_filtered.drop(columns=['Lon', 'Lat', 'Dep', 'Vp', 'Resis', 'Vpt', 'Vpt_norm', 'Resolution', 'Resis_Vp', 'CKB'])
 data = df.values
+
 data_trans = np.transpose(data)
 data = data_trans
 data_xy_tran = np.stack(data)
